@@ -1,0 +1,57 @@
+package com.truckify.app.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.truckify.app.components.TruckifyTopAppBar
+import com.truckify.app.firebase.AuthManager
+import com.truckify.app.firebase.FirestoreManager
+import com.truckify.app.models.Shipment
+import com.truckify.app.ui.theme.LightBlue
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HistoryScreen(onBack: () -> Unit, userRole: String) {
+    var history by remember { mutableStateOf<List<Shipment>>(emptyList()) }
+    DisposableEffect(Unit) {
+        val email = AuthManager.getCurrentUserEmail() ?: ""
+        var registration: com.google.firebase.firestore.ListenerRegistration? = null
+        if (email.isNotEmpty()) {
+            registration = FirestoreManager.getShipmentHistory(email, userRole) { history = it }
+        }
+        onDispose { registration?.remove() }
+    }
+
+    Scaffold(
+        topBar = {
+            TruckifyTopAppBar(
+                title = "Order History",
+                onBack = onBack
+            )
+        }
+    ) { padding ->
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(history) { shipment ->
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Shipment #${shipment.id.takeLast(4).uppercase()}", fontWeight = FontWeight.Bold)
+                        Text("${shipment.pickupAddress.split(",").first()} → ${shipment.destinationAddress.split(",").first()}", color = Color.Gray)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(shipment.status, color = if(shipment.status == "Delivered") Color(0xFF2E7D32) else LightBlue, fontWeight = FontWeight.Bold)
+                            Text(shipment.price, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

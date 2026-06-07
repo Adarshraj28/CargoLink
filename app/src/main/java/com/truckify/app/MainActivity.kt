@@ -1,0 +1,436 @@
+package com.truckify.app
+
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.google.android.libraries.places.api.Places
+import com.truckify.app.firebase.AuthManager
+import com.truckify.app.firebase.FirestoreManager
+import com.truckify.app.screens.*
+import com.razorpay.Checkout
+import com.razorpay.PaymentResultListener
+import com.stripe.android.PaymentConfiguration
+import com.stripe.android.paymentsheet.PaymentSheet
+import com.stripe.android.paymentsheet.PaymentSheetResult
+import android.content.Context
+import android.content.SharedPreferences
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.activity.result.contract.ActivityResultContracts
+import com.truckify.app.navigation.Screen
+import com.truckify.app.viewmodel.AuthViewModel
+import androidx.activity.viewModels
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity(), PaymentResultListener {
+
+    private val authViewModel: AuthViewModel by viewModels()
+    private lateinit var paymentSheet: PaymentSheet
+    private lateinit var sharedPreferences: SharedPreferences
+    private var pendingTopupAmount: Double = 0.0
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val deniedPermissions = results.filter { !it.value }.keys
+        if (deniedPermissions.isNotEmpty()) {
+            if (deniedPermissions.any { ActivityCompat.shouldShowRequestPermissionRationale(this, it) }) {
+                Toast.makeText(this, "These permissions are required for core features.", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this, "Please enable permissions in app settings to use all features.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
+        super.onCreate(savedInstanceState)
+        
+        android.util.Log.d("Truckify", "MainActivity: onCreate")
+        
+        splashScreen.setKeepOnScreenCondition { 
+            val checked = authViewModel.isAuthChecked.value
+            if (!checked) android.util.Log.d("Truckify", "Waiting for auth check...")
+            !checked 
+        }
+
+        sharedPreferences = getSharedPreferences("truckify_prefs", MODE_PRIVATE)
+        
+        lifecycleScope.launch(Dispatchers.Main) {
+            try {
+                if (BuildConfig.GOOGLE_MAPS_KEY.isNotEmpty()) {
+                    Places.initialize(applicationContext, BuildConfig.GOOGLE_MAPS_KEY)
+                    android.util.Log.d("Truckify", "Places initialized")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("Truckify", "Places Init Error: ${e.message}")
+            }
+
+            try {
+                Checkout.preload(applicationContext)
+                android.util.Log.d("Truckify", "Razorpay preloaded")
+            } catch (e: Exception) {
+                android.util.Log.e("Truckify", "Razorpay Preload Error: ${e.message}")
+            }
+            
+            try {
+                if (BuildConfig.STRIPE_KEY.isNotEmpty()) {
+                    PaymentConfiguration.init(this@MainActivity, BuildConfig.STRIPE_KEY)
+                    android.util.Log.d("Truckify", "Stripe initialized")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("Truckify", "Stripe Init Error: ${e.message}")
+            }
+        }
+        
+        paymentSheet = PaymentSheet(this) { onPaymentSheetResult(it) }
+
+        requestPermissions()
+
+        setContent {
+            var isDarkTheme by remember { 
+                mutableStateOf(sharedPreferences.getBoolean("dark_mode", false)) 
+            }
+            
+            com.truckify.app.ui.theme.TruckifyTheme(darkTheme = isDarkTheme) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    TruckifyApp(
+                        isDarkTheme = isDarkTheme,
+                        onThemeToggle = { 
+                            isDarkTheme = !isDarkTheme
+                            sharedPreferences.edit().putBoolean("dark_mode", isDarkTheme).apply()
+                        },
+                        authViewModel = authViewModel
+                    )
+                }
+            }
+        }
+    }
+
+    fun startRazorpayPayment(amount: Int) {
+        pendingTopupAmount = amount.toDouble()
+        val checkout = Checkout()
+        checkout.setKeyID(BuildConfig.RAZORPAY_KEY)
+        try {
+            val options = org.json.JSONObject()
+            options.put("name", "Truckify Logistics")
+            options.put("description", "Wallet Refill")
+            options.put("currency", "INR")
+            options.put("amount", amount * 100) // amount in paisa
+            options.put("prefill.email", AuthManager.getCurrentUserEmail() ?: "")
+            checkout.open(this, options)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error in Razorpay: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onPaymentSuccess(razorpayPaymentId: String?) {
+        Toast.makeText(this, "Razorpay Success: $razorpayPaymentId", Toast.LENGTH_LONG).show()
+        AuthManager.getCurrentUserEmail()?.let { email ->
+            FirestoreManager.topupWallet(email, pendingTopupAmount, "Razorpay") {
+                Toast.makeText(this, "Wallet Updated! ₹$pendingTopupAmount added.", Toast.LENGTH_SHORT).show()
+                pendingTopupAmount = 0.0
+            }
+        }
+    }
+
+    override fun onPaymentError(code: Int, response: String?) {
+        Toast.makeText(this, "Razorpay Failed: $response", Toast.LENGTH_LONG).show()
+    }
+
+    private fun onPaymentSheetResult(paymentSheetResult: PaymentSheetResult) {
+        when (paymentSheetResult) {
+            is PaymentSheetResult.Canceled -> {
+                Toast.makeText(this, "Payment Canceled", Toast.LENGTH_SHORT).show()
+            }
+            is PaymentSheetResult.Failed -> {
+                Toast.makeText(this, "Payment Failed: ${paymentSheetResult.error.message}", Toast.LENGTH_SHORT).show()
+            }
+            is PaymentSheetResult.Completed -> {
+                AuthManager.getCurrentUserEmail()?.let { email ->
+                    FirestoreManager.topupWallet(email, pendingTopupAmount, "Stripe") {
+                        Toast.makeText(this, "Stripe Payment Success! ₹$pendingTopupAmount added.", Toast.LENGTH_SHORT).show()
+                        pendingTopupAmount = 0.0
+                    }
+                }
+            }
+        }
+    }
+
+    fun startStripePayment(amount: Double, clientSecret: String) {
+        pendingTopupAmount = amount
+        val configuration = PaymentSheet.Configuration(
+            merchantDisplayName = "Truckify Logistics"
+        )
+        paymentSheet.presentWithPaymentIntent(clientSecret, configuration)
+    }
+
+    private fun requestPermissions() {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+        val permissionsToRequest = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+        }
+    }
+
+    override fun onDestroy() {
+        // Stop any background services if needed
+        val intent = android.content.Intent(this, com.truckify.app.service.TrackingService::class.java)
+        stopService(intent)
+        super.onDestroy()
+    }
+}
+
+@Composable
+fun TruckifyApp(
+    isDarkTheme: Boolean, 
+    onThemeToggle: () -> Unit,
+    authViewModel: AuthViewModel
+) {
+    val navController = rememberNavController()
+    val userRole by authViewModel.userRole.collectAsStateWithLifecycle()
+    val isLoading by authViewModel.isLoading.collectAsStateWithLifecycle()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsStateWithLifecycle()
+    val isAuthChecked by authViewModel.isAuthChecked.collectAsStateWithLifecycle()
+    
+    var selectedShipmentId by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(isAuthChecked, isLoading, isLoggedIn, userRole) {
+        if (isAuthChecked && !isLoading) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (isLoggedIn) {
+                if (userRole != null && userRole != "NoRoleField" && userRole != "ProfileMissing" && userRole != "Error: NoCurrentUser") {
+                    if (currentRoute == Screen.Splash.route || currentRoute == Screen.Login.route || currentRoute == Screen.Signup.route) {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                } else if (userRole == "ProfileMissing" || userRole == "NoRoleField" || userRole?.startsWith("Error:") == true) {
+                    // Handle case where user exists in Auth but not in Firestore or error occurred
+                    authViewModel.logout()
+                }
+            } else {
+                if (currentRoute != Screen.Login.route && currentRoute != Screen.Signup.route && currentRoute != Screen.Splash.route) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                } else if (currentRoute == Screen.Splash.route) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                }
+            }
+        }
+    }
+
+    NavHost(navController = navController, startDestination = Screen.Splash.route) {
+        composable(Screen.Splash.route) { SplashScreen() }
+        composable(Screen.Login.route) {
+            LoginScreen(
+                onSignupClick = { navController.navigate(Screen.Signup.route) },
+                authViewModel = authViewModel
+            )
+        }
+        composable(Screen.Signup.route) {
+            SignupScreen(
+                onBack = { navController.popBackStack() },
+                authViewModel = authViewModel
+            )
+        }
+        composable(Screen.Home.route) {
+            if (userRole == "Vendor") {
+                HomeDashboard(
+                    onCreateClick = { navController.navigate(Screen.Create.route) },
+                    onNotificationClick = { navController.navigate(Screen.Notifications.route) },
+                    onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                    onSearchClick = { navController.navigate(Screen.Search.route) },
+                    onFleetClick = { navController.navigate(Screen.FleetHeatmap.route) },
+                    onRoutesClick = { navController.navigate(Screen.Routes.route) },
+                    onPaymentsClick = { navController.navigate(Screen.Payments.route) },
+                    onOrdersClick = { navController.navigate(Screen.Orders.route) },
+                    onHistoryClick = { navController.navigate(Screen.History.route) },
+                    onChatbotClick = { navController.navigate(Screen.Chatbot.route) },
+                    onTrackClick = { id ->
+                        selectedShipmentId = id
+                        navController.navigate(Screen.Tracking.route)
+                    },
+                    onVerifyClick = { navController.navigate(Screen.Verification.route) },
+                    onQrClick = { id, status ->
+                        selectedShipmentId = id
+                        navController.navigate(Screen.QrShow.route)
+                    },
+                    onDriversClick = { navController.navigate(Screen.Drivers.route) }
+                )
+            } else {
+                DriverDashboard(
+                    onNotificationClick = { navController.navigate(Screen.Notifications.route) },
+                    onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                    onSearchClick = { navController.navigate(Screen.Search.route) },
+                    onPaymentsClick = { navController.navigate(Screen.Payments.route) },
+                    onOrdersClick = { navController.navigate(Screen.Orders.route) },
+                    onHistoryClick = { navController.navigate(Screen.History.route) },
+                    onChatbotClick = { navController.navigate(Screen.Chatbot.route) },
+                    onTrackClick = { id ->
+                        selectedShipmentId = id
+                        navController.navigate(Screen.Tracking.route)
+                    },
+                    onVerifyClick = { navController.navigate(Screen.Verification.route) },
+                    onQrClick = { id, status ->
+                        selectedShipmentId = id
+                        if (status == "In Transit") navController.navigate(Screen.OtpVerify.route)
+                        else navController.navigate(Screen.QrScan.route)
+                    },
+                    onLoadClick = { id ->
+                        selectedShipmentId = id
+                        navController.navigate(Screen.LoadDetails.route)
+                    },
+                    onProfileClick = { navController.navigate(Screen.Profile.route) },
+                    onExpenseClick = { navController.navigate(Screen.ExpenseTracker.route) }
+                )
+            }
+        }
+        composable(Screen.FleetHeatmap.route) { FleetHeatmapScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Notifications.route) { NotificationScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Payments.route) { PaymentScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Drivers.route) { DriversScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Routes.route) { RoutesScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Search.route) { SearchScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Orders.route) {
+            CurrentOrderScreen(
+                onBack = { navController.popBackStack() },
+                userRole = userRole ?: "Vendor",
+                onTrackClick = { id ->
+                    selectedShipmentId = id
+                    navController.navigate(Screen.Tracking.route)
+                },
+                onQrClick = { id, status ->
+                    selectedShipmentId = id
+                    if (userRole == "Driver") {
+                        if (status == "In Transit") navController.navigate(Screen.OtpVerify.route)
+                        else navController.navigate(Screen.QrScan.route)
+                    } else navController.navigate(Screen.QrShow.route)
+                }
+            )
+        }
+        composable(Screen.History.route) { HistoryScreen(onBack = { navController.popBackStack() }, userRole = userRole ?: "Vendor") }
+        composable(Screen.Chatbot.route) { 
+            ChatbotScreen(
+                onBack = { navController.popBackStack() }, 
+                userRole = userRole ?: "Vendor" 
+            ) 
+        }
+        composable(Screen.LoadDetails.route) {
+            LoadDetailsScreen(
+                shipmentId = selectedShipmentId,
+                onBack = { navController.popBackStack() },
+                onAccepted = { navController.navigate(Screen.Orders.route) }
+            )
+        }
+        composable(Screen.Verification.route) { DriverVerificationScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.QrShow.route) { QRShowScreen(shipmentId = selectedShipmentId, onBack = { navController.popBackStack() }) }
+        composable(Screen.QrScan.route) { QRScanScreen(shipmentId = selectedShipmentId, onBack = { navController.popBackStack() }) }
+        composable(Screen.OtpVerify.route) { OTPVerifyScreen(shipmentId = selectedShipmentId, onBack = { navController.popBackStack() }) }
+        composable(Screen.Tracking.route) {
+            LiveTrackingScreen(
+                shipmentId = selectedShipmentId,
+                onBack = { navController.popBackStack() },
+                userRole = userRole ?: "Vendor",
+                onChatClick = { navController.navigate(Screen.ShipmentChat.route) },
+                onVerifyClick = { navController.navigate(Screen.OtpVerify.route) }
+            )
+        }
+        composable(Screen.ShipmentChat.route) {
+            ShipmentChatScreen(
+                shipmentId = selectedShipmentId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.ExpenseTracker.route) {
+            ExpenseTrackerScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Screen.Settings.route) {
+            val context = LocalContext.current
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                isDarkTheme = isDarkTheme,
+                onThemeToggle = onThemeToggle,
+                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
+                onSecurityClick = { 
+                    Toast.makeText(context, "Security Settings coming soon!", Toast.LENGTH_SHORT).show()
+                },
+                onTermsClick = { navController.navigate(Screen.Terms.route) }
+            )
+        }
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                onBack = { navController.popBackStack() },
+                onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                onPersonalInfoClick = { navController.navigate(Screen.EditProfile.route) },
+                onDocumentsClick = { navController.navigate(Screen.Verification.route) },
+                onPayoutsClick = { navController.navigate(Screen.Payments.route) },
+                onSupportClick = { navController.navigate(Screen.Support.route) }
+            )
+        }
+        composable(Screen.Create.route) { 
+            CreateShipmentScreen(
+                onBack = { navController.popBackStack() },
+                onPostSuccess = { id ->
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                }
+            ) 
+        }
+        composable(Screen.Matching.route + "/{shipmentId}") { backStackEntry ->
+            val shipmentId = backStackEntry.arguments?.getString("shipmentId") ?: ""
+            MatchingScreen(shipmentId = shipmentId, onBack = { 
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(Screen.Home.route) { inclusive = true }
+                }
+            })
+        }
+        composable(Screen.EditProfile.route) { EditProfileScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Terms.route) { TermsScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Support.route) {
+            SupportScreen(
+                onBack = { navController.popBackStack() },
+                onChatSupportClick = { navController.navigate(Screen.Chatbot.route) },
+                onHistoryClick = { /* Navigate to support tickets history if implemented */ }
+            )
+        }
+    }
+}

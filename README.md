@@ -1,4 +1,4 @@
-# Truckify - Smart Logistics Platform
+# Truckify - Turning empty trucks into earning assets
 
 Truckify is a next-generation logistics platform connecting Vendors and Drivers with AI-powered route optimization, cost prediction, and secure payments.
 

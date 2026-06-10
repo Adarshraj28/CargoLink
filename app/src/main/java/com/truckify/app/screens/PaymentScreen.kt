@@ -5,10 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.truckify.app.MainActivity
 import com.truckify.app.components.TruckifyTopAppBar
 import com.truckify.app.ui.theme.*
 import com.truckify.app.viewmodel.PaymentViewModel
@@ -32,7 +34,12 @@ fun PaymentScreen(onBack: () -> Unit, viewModel: PaymentViewModel = viewModel())
     val tripEarnings by viewModel.tripEarnings.collectAsState()
     val extraCharges by viewModel.extraCharges.collectAsState()
     val otherCharges by viewModel.otherCharges.collectAsState()
+    val history by viewModel.history.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    
+    var showTopupDialog by remember { mutableStateOf(false) }
+    var topupAmount by remember { mutableStateOf("1000") }
+    val context = androidx.compose.ui.platform.LocalContext.current
     
     LaunchedEffect(Unit) {
         viewModel.loadData()
@@ -42,12 +49,12 @@ fun PaymentScreen(onBack: () -> Unit, viewModel: PaymentViewModel = viewModel())
         containerColor = BackgroundDark,
         topBar = {
             TruckifyTopAppBar(
-                title = "Earnings",
+                title = "Wallet & Earnings",
                 onBack = onBack
             )
         }
     ) { paddingValues ->
-        if (isLoading) {
+        if (isLoading && history.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = PrimaryBlue)
             }
@@ -57,22 +64,42 @@ fun PaymentScreen(onBack: () -> Unit, viewModel: PaymentViewModel = viewModel())
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
                     Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "₹${String.format(Locale.getDefault(), "%,.0f", balance)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 36.sp)
-                        Text(text = "Total Balance", color = TextGray, fontSize = 14.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(16.dp))
-                            Text(text = " +12.5% from last week", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "₹${String.format(Locale.getDefault(), "%,.0f", balance)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 42.sp)
+                        Text(text = "Current Balance", color = TextGray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { /* Withdraw Logic */ },
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Withdraw")
+                            }
+                            Button(
+                                onClick = { showTopupDialog = true },
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Top-up")
+                            }
                         }
                     }
                 }
 
                 item {
+                    Text(text = "Earnings Analytics", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(containerColor = CardDark)
                     ) {
@@ -80,19 +107,19 @@ fun PaymentScreen(onBack: () -> Unit, viewModel: PaymentViewModel = viewModel())
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 (listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")).forEachIndexed { index, day ->
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        val height = (50..120).random().dp
+                                        val height = (30..100).random().dp
                                         Box(
                                             modifier = Modifier
-                                                .width(12.dp)
-                                                .height(120.dp),
+                                                .width(8.dp)
+                                                .height(100.dp),
                                             contentAlignment = Alignment.BottomCenter
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .width(12.dp)
+                                                    .width(8.dp)
                                                     .height(height)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (index == 5) PrimaryBlue else PrimaryBlue.copy(alpha = 0.3f))
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(if (index == 6) AccentGreen else PrimaryBlue)
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -105,22 +132,110 @@ fun PaymentScreen(onBack: () -> Unit, viewModel: PaymentViewModel = viewModel())
                 }
 
                 item {
-                    Text(text = "Breakdown", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    BreakdownItem("Trip Earnings", "₹${String.format(Locale.getDefault(), "%,.0f", tripEarnings)}")
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 12.dp))
-                    BreakdownItem("Extra Charges", "₹${String.format(Locale.getDefault(), "%,.0f", extraCharges)}")
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 12.dp))
-                    BreakdownItem("Toll & Others", "-₹${String.format(Locale.getDefault(), "%,.0f", otherCharges)}", isNegative = true)
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 12.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(text = "Total Earnings", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text(text = "₹${String.format(Locale.getDefault(), "%,.0f", tripEarnings + extraCharges - otherCharges)}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    }
+                    Text(text = "Transaction History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+
+                items(history) { txn ->
+                    TransactionItem(txn)
                 }
                 
-                item { Spacer(modifier = Modifier.height(40.dp)) }
+                item { Spacer(modifier = Modifier.height(20.dp)) }
             }
+        }
+
+        if (showTopupDialog) {
+            AlertDialog(
+                onDismissRequest = { showTopupDialog = false },
+                title = { Text("Top-up Wallet") },
+                text = {
+                    Column {
+                        Text("Enter amount to add to your wallet:")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = topupAmount,
+                            onValueChange = { if (it.all { char -> char.isDigit() }) topupAmount = it },
+                            label = { Text("Amount (₹)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val amount = topupAmount.toIntOrNull() ?: 0
+                            if (amount > 0) {
+                                (context as? MainActivity)?.startRazorpayPayment(amount)
+                                showTopupDialog = false
+                            }
+                        }
+                    ) {
+                        Text("Pay Now")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTopupDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun TransactionItem(txn: com.truckify.app.models.Transaction) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when(txn.type) {
+                            "Payout", "Topup", "Incentive" -> AccentGreen.copy(alpha = 0.1f)
+                            else -> Color.Red.copy(alpha = 0.1f)
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when(txn.type) {
+                        "Topup" -> Icons.Default.AddCard
+                        "Payout" -> Icons.Default.Payments
+                        "Escrow Payment" -> Icons.Default.HistoryEdu
+                        else -> Icons.AutoMirrored.Filled.ReceiptLong
+                    },
+                    contentDescription = null,
+                    tint = if (txn.type in listOf("Payout", "Topup", "Incentive")) AccentGreen else Color.Red,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = txn.type, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    text = if (txn.shipmentId.isNotEmpty()) "Shipment #${txn.shipmentId.takeLast(4)}" else txn.gateway,
+                    color = TextGray,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = (if (txn.type in listOf("Payout", "Topup", "Incentive")) "+" else "-") + "₹${String.format(Locale.getDefault(), "%.0f", txn.amount)}",
+                color = if (txn.type in listOf("Payout", "Topup", "Incentive")) AccentGreen else Color.Red,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
         }
     }
 }

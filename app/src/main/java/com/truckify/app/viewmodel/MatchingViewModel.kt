@@ -47,6 +47,11 @@ class MatchingViewModel : ViewModel() {
         }
     }
 
+    fun assignDriver(driverEmail: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val s = _shipment.value ?: return
+        FirestoreManager.assignDriverToShipment(s.id, driverEmail, onSuccess, onError)
+    }
+
     override fun onCleared() {
         super.onCleared()
         shipmentListener?.remove()

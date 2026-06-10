@@ -35,10 +35,18 @@ class HomeViewModel : ViewModel() {
     private val _costSaved = MutableStateFlow(0.0)
     val costSaved: StateFlow<Double> = _costSaved
 
+    private val _walletBalance = MutableStateFlow(0.0)
+    val walletBalance: StateFlow<Double> = _walletBalance
+
     private var txnsListener: ListenerRegistration? = null
+    private var walletListener: ListenerRegistration? = null
 
     fun loadDashboardData() {
-        val email = AuthManager.getCurrentUserEmail() ?: return
+        val email = AuthManager.getCurrentUserEmail()
+        if (email == null) {
+            _isLoading.value = false
+            return
+        }
         
         viewModelScope.launch {
             _isLoading.value = true
@@ -63,9 +71,11 @@ class HomeViewModel : ViewModel() {
             // Listen for active shipments
             shipmentsListener?.remove()
             shipmentsListener = FirestoreManager.getActiveShipments(email) { shipments ->
-                _activeShipments.value = shipments
+                // Sort by newest first to ensure we find the most relevant current trip
+                val sorted = shipments.sortedByDescending { it.timestamp }
+                _activeShipments.value = sorted
                 _isLoading.value = false
-                calculateCostSaved(shipments)
+                calculateCostSaved(sorted)
             }
 
             // Monthly Spend
@@ -75,12 +85,33 @@ class HomeViewModel : ViewModel() {
                 val now = System.currentTimeMillis()
                 _monthlySpend.value = txns.filter { it.type == "Escrow Payment" && (now - it.timestamp < monthMillis) }.sumOf { it.amount }
             }
+
+            walletListener?.remove()
+            walletListener = FirestoreManager.getWalletBalance(email) { balance ->
+                _walletBalance.value = balance
+            }
         }
+    }
+
+    fun repostShipment(shipment: Shipment, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        val newShipment = shipment.copy(
+            id = "", // Will be set by Firestore
+            status = "Available",
+            driverEmail = "",
+            timestamp = System.currentTimeMillis(),
+            paymentStatus = "Pending",
+            escrowTxnId = "",
+            pickupTime = 0,
+            deliveryTime = 0
+        )
+        FirestoreManager.postShipment(newShipment, onSuccess, onError)
     }
 
     private fun calculateCostSaved(shipments: List<Shipment>) {
         // Mock logic: 15% of total shipment value if shared pooling was used
-        val total = shipments.sumOf { it.price.replace("₹", "").replace(",", "").toDoubleOrNull() ?: 0.0 }
+        val total = shipments.sumOf { 
+            it.price.replace("[^\\d.]".toRegex(), "").toDoubleOrNull() ?: 0.0 
+        }
         _costSaved.value = total * 0.15
     }
 
@@ -88,5 +119,6 @@ class HomeViewModel : ViewModel() {
         super.onCleared()
         shipmentsListener?.remove()
         txnsListener?.remove()
+        walletListener?.remove()
     }
 }

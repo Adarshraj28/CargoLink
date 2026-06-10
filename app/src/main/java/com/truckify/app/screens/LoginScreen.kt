@@ -5,40 +5,38 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.truckify.app.firebase.AuthManager
-import com.truckify.app.ui.theme.DarkBlue
-import com.truckify.app.ui.theme.LightBlue
-import com.truckify.app.utils.NetworkUtils
+import com.truckify.app.components.TruckifyButton
+import com.truckify.app.components.TruckifyTextField
+import com.truckify.app.ui.theme.*
 import com.truckify.app.viewmodel.AuthViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun LoginScreen(onSignupClick: () -> Unit, authViewModel: AuthViewModel = viewModel()) {
+fun LoginScreen(
+    onSignupClick: (String) -> Unit,
+    onPhoneLoginClick: () -> Unit,
+    authViewModel: AuthViewModel,
+    role: String? = null
+) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var email by remember { mutableStateOf("") }
+    var emailOrPhone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    
+    var passwordVisible by remember { mutableStateOf(false) }
+
     val isLoading by authViewModel.isLoading.collectAsState()
     val error by authViewModel.error.collectAsState()
 
@@ -49,102 +47,162 @@ fun LoginScreen(onSignupClick: () -> Unit, authViewModel: AuthViewModel = viewMo
         }
     }
 
-    Surface(color = MaterialTheme.colorScheme.background) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Background Header
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocalShipping,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(300.dp)
+                        .align(Alignment.BottomStart)
+                        .offset(x = (-50).dp, y = 50.dp)
+                        .alpha(0.05f),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Column(
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    TruckifyLogoIcon()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "MOVE", fontFamily = Inter, color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text(text = " • ", fontFamily = Inter, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "CONNECT", fontFamily = Inter, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text(text = " • ", fontFamily = Inter, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "DELIVER", fontFamily = Inter, color = Beige, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    }
+                }
+            }
+        }
+
+        // Login Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
-            Icon(
-                imageVector = Icons.Default.LocalShipping,
-                contentDescription = "Logo",
-                modifier = Modifier.size(120.dp),
-                tint = LightBlue
-            )
-            Spacer(modifier = Modifier.height(40.dp))
-            Text(
-                text = "Welcome Back",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Login to your account", color = Color.Gray)
-            Spacer(modifier = Modifier.height(40.dp))
-
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Email Address") },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = LightBlue) },
-                shape = RoundedCornerShape(12.dp),
-                enabled = !isLoading
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Password") },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = LightBlue) },
-                shape = RoundedCornerShape(12.dp),
-                enabled = !isLoading
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                Text(
-                    text = "Forgot Password?",
-                    color = LightBlue,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(enabled = !isLoading) {
-                        if (email.isNotEmpty() && email.contains("@")) {
-                            scope.launch {
-                                AuthManager.forgotPassword(email)
-                                    .onSuccess { Toast.makeText(context, "Reset Email Sent", Toast.LENGTH_SHORT).show() }
-                                    .onFailure { Toast.makeText(context, it.message ?: "Error", Toast.LENGTH_SHORT).show() }
-                            }
-                        } else {
-                            Toast.makeText(context, "Enter your email first", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-            Spacer(modifier = Modifier.height(32.dp))
-            Button(
-                onClick = {
-                    if (!NetworkUtils.isInternetAvailable(context)) {
-                        Toast.makeText(context, "No Internet Connection", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-                    if (email.isEmpty() || password.isEmpty()) {
-                        Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-                    authViewModel.login(email, password)
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = DarkBlue),
-                enabled = !isLoading
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             ) {
-                if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                else Text(text = "Log In", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                Text(text = "Don't have an account? ", color = Color.Gray)
-                Text(
-                    text = "Sign Up",
-                    color = LightBlue,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable(enabled = !isLoading) { onSignupClick() }
-                )
+                Column(
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Text(
+                        text = if (role != null) "$role Login" else "Welcome Back",
+                        style = MaterialTheme.typography.displayMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (role == "Driver") "Access your loads and earnings" else "Login to your logistics dashboard",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    TruckifyTextField(
+                        value = emailOrPhone,
+                        onValueChange = { emailOrPhone = it },
+                        label = "Email or Phone",
+                        leadingIcon = Icons.Default.Person
+                    )
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    TruckifyTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = "Password",
+                        leadingIcon = Icons.Default.Lock,
+                        isPassword = true,
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        Text(
+                            text = "Forgot Password?",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { }
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    TruckifyButton(
+                        text = "Login",
+                        onClick = {
+                            if (emailOrPhone.trim().isEmpty() || password.trim().isEmpty()) {
+                                Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
+                                return@TruckifyButton
+                            }
+                            authViewModel.login(emailOrPhone.trim(), password.trim())
+                        },
+                        isLoading = isLoading
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedButton(
+                        onClick = onPhoneLoginClick,
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Phone, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Login with Phone Number")
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            "Don't have an account? ", 
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Sign up",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { onSignupClick(role ?: "Vendor") }
+                        )
+                    }
+                }
             }
         }
     }

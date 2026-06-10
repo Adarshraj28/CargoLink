@@ -8,10 +8,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.*
+import android.content.Intent
+import android.net.Uri
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
@@ -42,7 +49,14 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LiveTrackingScreen(shipmentId: String, onBack: () -> Unit, userRole: String, onChatClick: () -> Unit = {}, onVerifyClick: () -> Unit = {}) {
+fun LiveTrackingScreen(
+    shipmentId: String, 
+    onBack: () -> Unit, 
+    userRole: String, 
+    onChatClick: () -> Unit = {}, 
+    onVerifyClick: () -> Unit = {},
+    onAvailableRedirect: (String) -> Unit = {}
+) {
     val context = LocalContext.current
     var shipment by remember { mutableStateOf<Shipment?>(null) }
     val cameraPositionState = rememberCameraPositionState()
@@ -52,6 +66,9 @@ fun LiveTrackingScreen(shipmentId: String, onBack: () -> Unit, userRole: String,
     DisposableEffect(shipmentId) {
         if (shipmentId.isEmpty()) return@DisposableEffect onDispose {}
         val registration = FirestoreManager.listenToShipment(shipmentId) { updatedShipment ->
+            if (userRole == "Vendor" && updatedShipment.status == "Available") {
+                onAvailableRedirect(shipmentId)
+            }
             shipment = updatedShipment
             val target = if (updatedShipment.currentLat != 0.0) LatLng(updatedShipment.currentLat, updatedShipment.currentLng) else LatLng(updatedShipment.pickupLat, updatedShipment.pickupLng)
             coroutineScope.launch {
@@ -98,7 +115,47 @@ fun LiveTrackingScreen(shipmentId: String, onBack: () -> Unit, userRole: String,
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(
+                    isMyLocationEnabled = userRole == "Driver",
+                    mapStyleOptions = MapStyleOptions("""
+                        [
+                          {
+                            "elementType": "geometry",
+                            "stylers": [{ "color": "#242f3e" }]
+                          },
+                          {
+                            "elementType": "labels.text.fill",
+                            "stylers": [{ "color": "#746855" }]
+                          },
+                          {
+                            "elementType": "labels.text.stroke",
+                            "stylers": [{ "color": "#242f3e" }]
+                          },
+                          {
+                            "featureType": "administrative.locality",
+                            "elementType": "labels.text.fill",
+                            "stylers": [{ "color": "#d59563" }]
+                          },
+                          {
+                            "featureType": "road",
+                            "elementType": "geometry",
+                            "stylers": [{ "color": "#38414e" }]
+                          },
+                          {
+                            "featureType": "road",
+                            "elementType": "geometry.stroke",
+                            "stylers": [{ "color": "#212a37" }]
+                          },
+                          {
+                            "featureType": "water",
+                            "elementType": "geometry",
+                            "stylers": [{ "color": "#17263c" }]
+                          }
+                        ]
+                    """.trimIndent())
+                ),
+                uiSettings = MapUiSettings(zoomControlsEnabled = false)
             ) {
                 shipment?.let { s ->
                     val pickup = LatLng(s.pickupLat, s.pickupLng)
@@ -110,10 +167,18 @@ fun LiveTrackingScreen(shipmentId: String, onBack: () -> Unit, userRole: String,
                     
                     if (driver != null) {
                         Marker(state = MarkerState(position = driver), title = "Truck", icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
+                        
+                        // Route from Driver -> Pickup -> Destination
                         Polyline(
-                            points = listOf(pickup, driver, destination),
+                            points = if (s.status == "In Transit") {
+                                // Already picked up, show route to destination
+                                listOf(driver, destination)
+                            } else {
+                                // Not picked up yet, show route to pickup then destination
+                                listOf(driver, pickup, destination)
+                            },
                             color = PrimaryBlue,
-                            width = 12f,
+                            width = 10f,
                             startCap = RoundCap(),
                             endCap = RoundCap(),
                             jointType = JointType.ROUND
@@ -122,7 +187,7 @@ fun LiveTrackingScreen(shipmentId: String, onBack: () -> Unit, userRole: String,
                 }
             }
 
-            // Driver Card at bottom
+            // Bottom UI matching the image
             Column(
                 modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -138,48 +203,106 @@ fun LiveTrackingScreen(shipmentId: String, onBack: () -> Unit, userRole: String,
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardDark)
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2632))
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(BackgroundDark), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryBlue)
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = driverData?.get("name") as? String ?: "Assigning Driver...", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = String.format("%.1f", (driverData?.get("rating") as? Number)?.toDouble() ?: 0.0), color = Color(0xFFFFB300), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text(text = " • ${driverData?.get("truckNumber") as? String ?: "..."}", color = TextGray, fontSize = 12.sp)
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        if (userRole == "Vendor") {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier.size(56.dp).clip(CircleShape).background(Color(0xFF0D1117)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(28.dp))
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = driverData?.get("name") as? String ?: "Assigning...", 
+                                        color = Color.White, 
+                                        fontWeight = FontWeight.Bold, 
+                                        fontSize = 18.sp
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = String.format(java.util.Locale.getDefault(), "%.1f", (driverData?.get("rating") as? Number)?.toDouble() ?: 4.8), 
+                                            color = Color(0xFFFFB300), 
+                                            fontWeight = FontWeight.Bold, 
+                                            fontSize = 12.sp
+                                        )
+                                        Text(
+                                            text = " • ${driverData?.get("truckNumber") as? String ?: "RJ14GA2345"} • 14 Wheels", 
+                                            color = TextGray, 
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    val phone = driverData?.get("phone") as? String ?: "9988776655"
+                                    IconButton(
+                                        onClick = {
+                                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                                            context.startActivity(intent)
+                                        }, 
+                                        modifier = Modifier.size(48.dp).clip(CircleShape).background(SuccessGreen)
+                                    ) {
+                                        Icon(Icons.Default.Call, contentDescription = null, tint = Color.White)
+                                    }
+                                    IconButton(
+                                        onClick = onChatClick, 
+                                        modifier = Modifier.size(48.dp).clip(CircleShape).background(PrimaryBlue)
+                                    ) {
+                                        Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White)
+                                    }
                                 }
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconButton(onClick = {}, modifier = Modifier.size(44.dp).clip(CircleShape).background(AccentGreen)) {
-                                    Icon(Icons.Default.Call, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.height(24.dp))
+                        } else {
+                            // Driver View Header
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier.size(48.dp).clip(CircleShape).background(PrimaryBlue.copy(alpha = 0.1f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Navigation, contentDescription = null, tint = PrimaryBlue)
                                 }
-                                IconButton(onClick = onChatClick, modifier = Modifier.size(44.dp).clip(CircleShape).background(PrimaryBlue)) {
-                                    Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Ongoing Trip", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text("Head towards destination", color = TextGray, fontSize = 12.sp)
                                 }
                             }
+                            Spacer(modifier = Modifier.height(20.dp))
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        shipment?.let { s ->
+                            val distanceLeft = if (s.currentLat != 0.0) {
+                                calculateDistance(s.currentLat, s.currentLng, s.destLat, s.destLng)
+                            } else {
+                                calculateDistance(s.pickupLat, s.pickupLng, s.destLat, s.destLng)
+                            }
+                            val etaHours = distanceLeft / 45.0
+                            val etaString = if (etaHours < 1.0) "${(etaHours * 60).toInt()}m" else "${etaHours.toInt()}h ${(etaHours % 1 * 60).toInt()}m"
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TrackingStat("ETA", "2h 45m")
-                            TrackingStat("Distance Left", "120 km")
-                            TrackingStat("Next Stop", "Behror")
-                        }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                TrackingStat("ETA", etaString)
+                                TrackingStat("Distance Left", String.format(java.util.Locale.getDefault(), "%.0f km", distanceLeft))
+                                if (s.status == "In Transit") {
+                                    TrackingStat("Delivery OTP", s.deliveryOtp)
+                                } else {
+                                    TrackingStat("Next Stop", "Behror")
+                                }
+                            }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(28.dp))
 
-                        // Progress Timeline
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            TimelineStep("Confirmed", true, true)
-                            TimelineStep("Picked Up", true, true)
-                            TimelineStep("In Transit", true, false)
-                            TimelineStep("Delivered", false, false)
+                            // Progress Timeline matching the image dots
+                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                TimelineStep("Confirmed", active = true, completed = true)
+                                TimelineStep("Picked Up", active = s.status != "Available", completed = s.status != "Available")
+                                TimelineStep("In Transit", active = s.status == "In Transit", completed = s.status == "Delivered")
+                                TimelineStep("Delivered", active = s.status == "Delivered", completed = s.status == "Delivered")
+                            }
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 package com.truckify.app.screens
 
+import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun MatchingScreen(shipmentId: String, onBack: () -> Unit, viewModel: MatchingViewModel = viewModel()) {
     val shipment by viewModel.shipment.collectAsState()
     val drivers by viewModel.recommendedDrivers.collectAsState()
+    val aiAnalysis by viewModel.aiAnalysis.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     LaunchedEffect(shipmentId) {
@@ -42,44 +44,68 @@ fun MatchingScreen(shipmentId: String, onBack: () -> Unit, viewModel: MatchingVi
         containerColor = BackgroundDark,
         topBar = {
             TruckifyTopAppBar(
-                title = "Bids Received",
+                title = "Smart Matching",
                 onBack = onBack
             )
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (isLoading) {
+            if (isLoading && drivers.isEmpty()) {
                 Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = PrimaryBlue)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("AI is analyzing bids...", color = TextGray)
+                    Text("AI is analyzing drivers...", color = TextGray)
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
                     item {
-                        Column(modifier = Modifier.padding(vertical = 10.dp)) {
-                            Text(text = "Gurugram, HR → Jaipur, RJ", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = "Steel Coils • 20 Ton", color = TextGray, fontSize = 12.sp)
-                                Text(text = "${drivers.size} Bids Received", color = TextGray, fontSize = 12.sp)
+                        shipment?.let { s ->
+                            Column(modifier = Modifier.padding(vertical = 10.dp)) {
+                                Text(text = "${s.pickupAddress.split(",").first()} → ${s.destinationAddress.split(",").first()}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(text = "${s.weight} • ${s.truckType}", color = TextGray, fontSize = 12.sp)
+                                    Text(text = "${drivers.size} Smart Matches Found", color = TextGray, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    if (aiAnalysis != null) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.1f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue.copy(alpha = 0.3f))
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("AI ENGINE RECOMMENDATION", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = PrimaryBlue)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(text = aiAnalysis!!, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                                }
                             }
                         }
                     }
 
                     items(drivers) { driver ->
-                        BidCard(driver = driver, onSelect = onBack)
-                    }
-                    
-                    item {
-                        TextButton(
-                            onClick = onBack,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("View All Bids", color = PrimaryBlue, fontWeight = FontWeight.Bold)
-                        }
+                        BidCard(
+                            driver = driver, 
+                            onSelect = {
+                                viewModel.assignDriver(
+                                    driver.email,
+                                    onSuccess = { onBack() },
+                                    onError = { /* Handle error */ }
+                                )
+                            }
+                        )
                     }
                 }
             }
@@ -105,13 +131,23 @@ fun BidCard(driver: Driver, onSelect: () -> Unit) {
                         Text(text = driver.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(14.dp))
-                        Text(text = " ${driver.rating}", color = Color(0xFFFFB300), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(text = String.format(Locale.getDefault(), " %.1f", driver.rating), color = Color(0xFFFFB300), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
-                    Text(text = "14 Wheels • Open Body", color = TextGray, fontSize = 12.sp)
+                    Text(text = "${driver.truckType} • ${driver.experienceYears}y Exp", color = TextGray, fontSize = 12.sp)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "₹12,500", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Text(text = "15 km away", color = TextGray, fontSize = 12.sp)
+                    Surface(
+                        color = SuccessGreen.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "${driver.trustScore.toInt()}% Trust",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            color = SuccessGreen,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
                 }
             }
             
@@ -122,7 +158,7 @@ fun BidCard(driver: Driver, onSelect: () -> Unit) {
                     onClick = { /* View Profile */ },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue.copy(alpha = 0.5f))
                 ) {
                     Text(text = "View Profile", color = PrimaryBlue)
                 }
@@ -132,7 +168,7 @@ fun BidCard(driver: Driver, onSelect: () -> Unit) {
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
                 ) {
-                    Text(text = "Select")
+                    Text(text = "Assign Driver")
                 }
             }
         }

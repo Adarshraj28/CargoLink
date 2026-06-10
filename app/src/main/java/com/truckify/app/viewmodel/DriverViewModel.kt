@@ -52,6 +52,22 @@ class DriverViewModel : ViewModel() {
     private var incomingLoadListener: ListenerRegistration? = null
     private var currentLoadStatusListener: ListenerRegistration? = null
 
+    init {
+        // Periodic refresh to remove old loads from the UI state even if Firestore doesn't update
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60000) // Every minute
+                val now = System.currentTimeMillis()
+                val freshLoads = _availableLoads.value.filter { 
+                    now - it.timestamp < (24 * 60 * 60 * 1000L) 
+                }
+                if (freshLoads.size != _availableLoads.value.size) {
+                    _availableLoads.value = freshLoads
+                }
+            }
+        }
+    }
+
     fun loadDashboardData() {
         val email = AuthManager.getCurrentUserEmail() ?: return
         
@@ -119,18 +135,28 @@ class DriverViewModel : ViewModel() {
 
     private fun startListeningForIncomingLoads() {
         incomingLoadListener?.remove()
-        // Use a 5-second buffer to catch loads posted just as the driver goes online
-        val startTime = System.currentTimeMillis() - 5000
+        val startTime = System.currentTimeMillis() - 30000
+        
         incomingLoadListener = FirestoreManager.listenForNewLoads(startTime) { shipment ->
-            if (_activeTrip.value == null && _incomingLoad.value?.id != shipment.id) {
-                _incomingLoad.value = shipment
-                
-                // Monitor this specific load - if someone else takes it, dismiss the popup
-                currentLoadStatusListener?.remove()
-                currentLoadStatusListener = FirestoreManager.listenToShipment(shipment.id) { updated ->
-                    if (updated.status != "Available") {
-                        _incomingLoad.value = null
-                        currentLoadStatusListener?.remove()
+            val email = AuthManager.getCurrentUserEmail() ?: return@listenForNewLoads
+            FirestoreManager.getUserData(email) { userData ->
+                val capStr = userData?.get("capacity") as? String ?: "5 Tons"
+                val capacity = capStr.split(" ").firstOrNull()?.toDoubleOrNull() ?: 0.0
+                val loadWeightStr = shipment.weight.split(" ").firstOrNull() ?: "0"
+                val loadWeight = loadWeightStr.toDoubleOrNull() ?: 0.0
+
+                if (_activeTrip.value == null && 
+                    _incomingLoad.value?.id != shipment.id && 
+                    loadWeight <= capacity) {
+                    
+                    _incomingLoad.value = shipment
+                    
+                    currentLoadStatusListener?.remove()
+                    currentLoadStatusListener = FirestoreManager.listenToShipment(shipment.id) { updated ->
+                        if (updated.status != "Available") {
+                            _incomingLoad.value = null
+                            currentLoadStatusListener?.remove()
+                        }
                     }
                 }
             }

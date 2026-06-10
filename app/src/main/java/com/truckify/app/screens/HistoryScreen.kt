@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.truckify.app.components.TruckifyTopAppBar
+import com.truckify.app.components.LocationText
 import com.truckify.app.firebase.AuthManager
 import com.truckify.app.firebase.FirestoreManager
 import com.truckify.app.models.Shipment
@@ -44,7 +45,21 @@ fun HistoryScreen(onBack: () -> Unit, userRole: String) {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Shipment #${shipment.id.takeLast(4).uppercase()}", fontWeight = FontWeight.Bold)
-                        Text("${shipment.pickupAddress.split(",").first()} → ${shipment.destinationAddress.split(",").first()}", color = Color.Gray)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            LocationText(
+                                lat = shipment.pickupLat,
+                                lng = shipment.pickupLng,
+                                defaultAddress = shipment.pickupAddress,
+                                color = Color.Gray
+                            )
+                            Text(" → ", color = Color.Gray)
+                            LocationText(
+                                lat = shipment.destLat,
+                                lng = shipment.destLng,
+                                defaultAddress = shipment.destinationAddress,
+                                color = Color.Gray
+                            )
+                        }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(shipment.status, color = if(shipment.status == "Delivered") Color(0xFF2E7D32) else LightBlue, fontWeight = FontWeight.Bold)
                             Text(shipment.price, fontWeight = FontWeight.Bold)

@@ -28,6 +28,10 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.activity.result.contract.ActivityResultContracts
 import com.truckify.app.navigation.Screen
 import com.truckify.app.viewmodel.AuthViewModel
@@ -67,10 +71,14 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
         
         android.util.Log.d("Truckify", "MainActivity: onCreate")
         
+        val startTime = System.currentTimeMillis()
         splashScreen.setKeepOnScreenCondition { 
             val checked = authViewModel.isAuthChecked.value
-            if (!checked) android.util.Log.d("Truckify", "Waiting for auth check...")
-            !checked 
+            val elapsedTime = System.currentTimeMillis() - startTime
+            if (!checked) android.util.Log.d("Truckify", "Waiting for auth check... ($elapsedTime ms)")
+            
+            // Terminal condition: checked OR 5s passed
+            !checked && elapsedTime < 5000
         }
 
         sharedPreferences = getSharedPreferences("truckify_prefs", MODE_PRIVATE)
@@ -119,7 +127,8 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
                             isDarkTheme = !isDarkTheme
                             sharedPreferences.edit().putBoolean("dark_mode", isDarkTheme).apply()
                         },
-                        authViewModel = authViewModel
+                        authViewModel = authViewModel,
+                        sharedPreferences = sharedPreferences
                     )
                 }
             }
@@ -213,39 +222,72 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
 fun TruckifyApp(
     isDarkTheme: Boolean, 
     onThemeToggle: () -> Unit,
-    authViewModel: AuthViewModel
+    authViewModel: AuthViewModel,
+    sharedPreferences: SharedPreferences
 ) {
     val navController = rememberNavController()
     val userRole by authViewModel.userRole.collectAsStateWithLifecycle()
     val isLoading by authViewModel.isLoading.collectAsStateWithLifecycle()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsStateWithLifecycle()
+    val isPhoneVerified by authViewModel.isPhoneVerified.collectAsStateWithLifecycle()
     val isAuthChecked by authViewModel.isAuthChecked.collectAsStateWithLifecycle()
     
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+
     var selectedShipmentId by rememberSaveable { mutableStateOf("") }
 
-    LaunchedEffect(isAuthChecked, isLoading, isLoggedIn, userRole) {
-        if (isAuthChecked && !isLoading) {
-            val currentRoute = navController.currentBackStackEntry?.destination?.route
-            if (isLoggedIn) {
-                if (userRole != null && userRole != "NoRoleField" && userRole != "ProfileMissing" && userRole != "Error: NoCurrentUser") {
-                    if (currentRoute == Screen.Splash.route || currentRoute == Screen.Login.route || currentRoute == Screen.Signup.route) {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
-                } else if (userRole == "ProfileMissing" || userRole == "NoRoleField" || userRole?.startsWith("Error:") == true) {
-                    // Handle case where user exists in Auth but not in Firestore or error occurred
-                    authViewModel.logout()
+    LaunchedEffect(isAuthChecked, isLoading, isLoggedIn, isPhoneVerified, userRole, navBackStackEntry) {
+        if (!isAuthChecked || isLoading) return@LaunchedEffect
+
+        val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Splash.route
+        val isOnboardingCompleted = sharedPreferences.getBoolean("onboarding_completed", false)
+        val normalizedRole = userRole?.trim() ?: ""
+
+        android.util.Log.d("Truckify", "Nav check: loggedIn=$isLoggedIn, verified=$isPhoneVerified, role=$normalizedRole, route=$currentRoute")
+
+        if (!isOnboardingCompleted) {
+            if (currentRoute != Screen.Onboarding.route) {
+                navController.navigate(Screen.Onboarding.route) {
+                    popUpTo(0) { inclusive = true }
                 }
-            } else {
-                if (currentRoute != Screen.Login.route && currentRoute != Screen.Signup.route && currentRoute != Screen.Splash.route) {
-                    navController.navigate(Screen.Login.route) {
+            }
+            return@LaunchedEffect
+        }
+
+        if (isLoggedIn) {
+            if (normalizedRole.isNotEmpty() && 
+                !normalizedRole.contains("Error", ignoreCase = true) && 
+                !normalizedRole.equals("ProfileMissing", ignoreCase = true)) {
+                
+                val isBasicAuthScreen = currentRoute == Screen.Splash.route || 
+                                 currentRoute.startsWith(Screen.Login.route) || 
+                                 currentRoute.startsWith(Screen.Signup.route) || 
+                                 currentRoute == Screen.Onboarding.route || 
+                                 currentRoute == Screen.RoleSelection.route
+                
+                val isVerifiedOnPhoneScreen = currentRoute == Screen.PhoneLogin.route && isPhoneVerified
+
+                if (isBasicAuthScreen || isVerifiedOnPhoneScreen) {
+                    navController.navigate(Screen.Home.route) {
                         popUpTo(0) { inclusive = true }
                     }
-                } else if (currentRoute == Screen.Splash.route) {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.Splash.route) { inclusive = true }
-                    }
+                }
+            } else {
+                // Logged in but no valid role found
+                authViewModel.logout()
+            }
+        } else {
+            // Not logged in
+            val isAuthScreen = currentRoute == Screen.Splash.route || 
+                             currentRoute == Screen.Onboarding.route || 
+                             currentRoute == Screen.Home.route
+            
+            val isLoginOrSignup = currentRoute.startsWith(Screen.Login.route) || 
+                                currentRoute.startsWith(Screen.Signup.route)
+
+            if (isAuthScreen && !isLoginOrSignup && currentRoute != Screen.RoleSelection.route) {
+                navController.navigate(Screen.RoleSelection.route) {
+                    popUpTo(0) { inclusive = true }
                 }
             }
         }
@@ -253,22 +295,66 @@ fun TruckifyApp(
 
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
         composable(Screen.Splash.route) { SplashScreen() }
-        composable(Screen.Login.route) {
-            LoginScreen(
-                onSignupClick = { navController.navigate(Screen.Signup.route) },
-                authViewModel = authViewModel
+        composable(Screen.Onboarding.route) {
+            OnboardingScreen(
+                onFinish = {
+                    sharedPreferences.edit().putBoolean("onboarding_completed", true).apply()
+                    navController.navigate(Screen.RoleSelection.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    }
+                }
             )
         }
-        composable(Screen.Signup.route) {
+        composable(Screen.RoleSelection.route) {
+            RoleSelectionScreen(
+                onRoleSelected = { role ->
+                    navController.navigate(Screen.Login.route + "?role=$role")
+                }
+            )
+        }
+        composable(
+            route = Screen.Login.route + "?role={role}",
+            arguments = listOf(androidx.navigation.navArgument("role") { nullable = true })
+        ) { backStackEntry ->
+            val role = backStackEntry.arguments?.getString("role")
+            LoginScreen(
+                onSignupClick = { selectedRole ->
+                    navController.navigate(Screen.Signup.route + "?role=$selectedRole") 
+                },
+                onPhoneLoginClick = {
+                    navController.navigate(Screen.PhoneLogin.route)
+                },
+                authViewModel = authViewModel,
+                role = role
+            )
+        }
+        composable(Screen.PhoneLogin.route) {
+            PhoneLoginScreen(
+                authViewModel = authViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.Signup.route + "?role={role}",
+            arguments = listOf(androidx.navigation.navArgument("role") { defaultValue = "Vendor" })
+        ) { backStackEntry ->
+            val role = backStackEntry.arguments?.getString("role") ?: "Vendor"
             SignupScreen(
                 onBack = { navController.popBackStack() },
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                initialRole = role
             )
         }
         composable(Screen.Home.route) {
-            if (userRole == "Vendor") {
+            if (userRole?.equals("Vendor", ignoreCase = true) == true) {
                 HomeDashboard(
-                    onCreateClick = { navController.navigate(Screen.Create.route) },
+                    onCreateClick = { 
+                        if (isPhoneVerified) {
+                            navController.navigate(Screen.Create.route)
+                        } else {
+                            navController.navigate(Screen.PhoneLogin.route)
+                        }
+                    },
                     onNotificationClick = { navController.navigate(Screen.Notifications.route) },
                     onSettingsClick = { navController.navigate(Screen.Settings.route) },
                     onSearchClick = { navController.navigate(Screen.Search.route) },
@@ -280,6 +366,9 @@ fun TruckifyApp(
                     onChatbotClick = { navController.navigate(Screen.Chatbot.route) },
                     onTrackClick = { id ->
                         selectedShipmentId = id
+                        // If shipment is still available, show the confirming screen
+                        // This logic should probably be inside a ViewModel or checked here
+                        // For now, I'll navigate to Tracking and let Tracking decide or handle it in Home
                         navController.navigate(Screen.Tracking.route)
                     },
                     onVerifyClick = { navController.navigate(Screen.Verification.route) },
@@ -300,6 +389,9 @@ fun TruckifyApp(
                     onChatbotClick = { navController.navigate(Screen.Chatbot.route) },
                     onTrackClick = { id ->
                         selectedShipmentId = id
+                        // If shipment is still available, show the confirming screen
+                        // This logic should probably be inside a ViewModel or checked here
+                        // For now, I'll navigate to Tracking and let Tracking decide or handle it in Home
                         navController.navigate(Screen.Tracking.route)
                     },
                     onVerifyClick = { navController.navigate(Screen.Verification.route) },
@@ -322,7 +414,13 @@ fun TruckifyApp(
         composable(Screen.Payments.route) { PaymentScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Drivers.route) { DriversScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Routes.route) { RoutesScreen(onBack = { navController.popBackStack() }) }
-        composable(Screen.Search.route) { SearchScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Search.route) {
+            if (userRole == "Driver") {
+                FindLoadScreen(onBack = { navController.popBackStack() })
+            } else {
+                SearchScreen(onBack = { navController.popBackStack() })
+            }
+        }
         composable(Screen.Orders.route) {
             CurrentOrderScreen(
                 onBack = { navController.popBackStack() },
@@ -364,7 +462,13 @@ fun TruckifyApp(
                 onBack = { navController.popBackStack() },
                 userRole = userRole ?: "Vendor",
                 onChatClick = { navController.navigate(Screen.ShipmentChat.route) },
-                onVerifyClick = { navController.navigate(Screen.OtpVerify.route) }
+                onVerifyClick = { navController.navigate(Screen.OtpVerify.route) },
+                onAvailableRedirect = { id ->
+                    selectedShipmentId = id
+                    navController.navigate(Screen.Confirming.route) {
+                        popUpTo(Screen.Home.route)
+                    }
+                }
             )
         }
         composable(Screen.ShipmentChat.route) {
@@ -409,11 +513,27 @@ fun TruckifyApp(
             CreateShipmentScreen(
                 onBack = { navController.popBackStack() },
                 onPostSuccess = { id ->
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
+                    selectedShipmentId = id
+                    navController.navigate(Screen.Confirming.route) {
+                        popUpTo(Screen.Home.route)
                     }
                 }
             ) 
+        }
+        composable(Screen.Confirming.route) {
+            ShipmentConfirmingScreen(
+                shipmentId = selectedShipmentId,
+                onBack = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                },
+                onConfirmed = {
+                    navController.navigate(Screen.Tracking.route) {
+                        popUpTo(Screen.Home.route)
+                    }
+                }
+            )
         }
         composable(Screen.Matching.route + "/{shipmentId}") { backStackEntry ->
             val shipmentId = backStackEntry.arguments?.getString("shipmentId") ?: ""

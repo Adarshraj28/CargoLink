@@ -1,5 +1,6 @@
 package com.truckify.app.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,7 +53,7 @@ fun ProfileScreen(
     val vehicleNo = userData?.get("vehicleNo") as? String ?: "RJ14GA2345"
 
     Scaffold(
-        containerColor = BackgroundDark,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TruckifyTopAppBar(
                 title = "Profile",
@@ -101,32 +102,41 @@ fun ProfileHeaderNew(name: String, email: String, rating: Double) {
     ) {
         Box(
             modifier = Modifier
-                .size(70.dp)
+                .size(74.dp)
                 .clip(CircleShape)
-                .background(CardDark),
+                .background(PrimaryBlue.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(40.dp))
+            Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(44.dp))
         }
 
-        Spacer(modifier = Modifier.width(20.dp))
+        Spacer(modifier = Modifier.width(24.dp))
 
         Column {
             Text(
                 text = name,
                 fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
-                color = Color.White
+                fontSize = 24.sp,
+                color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "+91 98765 43210", // Placeholder for phone
+                text = email, 
                 fontSize = 14.sp,
-                color = TextGray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "$rating", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(6.dp))
+            Surface(
+                color = WarningOrange.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "$rating", color = WarningOrange, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                }
             }
         }
     }
@@ -137,22 +147,22 @@ fun VehicleDetailsCardNew(vehicleNo: String, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Vehicle Details", color = TextGray, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(text = "VEHICLE DETAILS", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(text = vehicleNo, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
-                    Text(text = "14 Wheels • Open Body", color = TextGray, fontSize = 14.sp)
+                    Text(text = vehicleNo, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = "14 Wheels • Open Body", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                 }
-                // Truck image placeholder
-                Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(60.dp))
+                Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(50.dp))
             }
         }
     }
@@ -164,18 +174,26 @@ fun ProfileMenuItemNew(title: String, icon: androidx.compose.ui.graphics.vector.
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 12.dp),
+            .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextGray, modifier = Modifier.size(24.dp))
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
+            }
+        }
         Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = title,
             modifier = Modifier.weight(1f),
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
             fontSize = 16.sp,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onBackground
         )
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextGray)
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
     }
 }

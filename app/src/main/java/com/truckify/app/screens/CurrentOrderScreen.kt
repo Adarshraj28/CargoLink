@@ -28,6 +28,7 @@ fun CurrentOrderScreen(
 ) {
     val activeShipments by viewModel.activeShipments.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(userRole) {
         viewModel.observeOrders(userRole)
@@ -54,6 +55,13 @@ fun CurrentOrderScreen(
                                 shipment = shipment,
                                 onTrackClick = onTrackClick,
                                 onQrClick = { id -> onQrClick(id, shipment.status) },
+                                onRepostClick = { item ->
+                                    viewModel.repostShipment(
+                                        item,
+                                        onSuccess = { android.widget.Toast.makeText(context, "Load Re-posted!", android.widget.Toast.LENGTH_SHORT).show() },
+                                        onError = { android.widget.Toast.makeText(context, "Error: $it", android.widget.Toast.LENGTH_SHORT).show() }
+                                    )
+                                },
                                 userRole = userRole
                             )
                         }

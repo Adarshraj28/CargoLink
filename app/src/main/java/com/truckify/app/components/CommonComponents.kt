@@ -21,10 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.truckify.app.ui.theme.DarkBlue
-import com.truckify.app.ui.theme.LightBlue
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
+import com.truckify.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,9 +34,8 @@ fun TruckifyTopAppBar(
         title = { 
             Text(
                 text = title, 
-                fontWeight = FontWeight.Bold, 
-                fontSize = 20.sp,
-                color = Color.White
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground
             ) 
         },
         navigationIcon = {
@@ -47,16 +43,13 @@ fun TruckifyTopAppBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack, 
                     contentDescription = "Back", 
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.onBackground
                 )
             }
         },
         actions = actions,
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = Color.Transparent
-        ),
-        modifier = Modifier.background(
-            Brush.horizontalGradient(listOf(DarkBlue, LightBlue))
+            containerColor = MaterialTheme.colorScheme.background
         )
     )
 }
@@ -64,139 +57,193 @@ fun TruckifyTopAppBar(
 @Composable
 fun SettingsItem(title: String, icon: ImageVector, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable { onClick() },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
     ) {
-        Row(modifier = Modifier.padding(20.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(), 
+            horizontalArrangement = Arrangement.SpaceBetween, 
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            icon, 
+                            contentDescription = null, 
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(16.dp))
-                Text(text = title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                Text(
+                    text = title, 
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight, 
+                contentDescription = null, 
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, 
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
 
+@Composable
+fun TruckifyButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isLoading: Boolean = false
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(BlueGradient),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White
+        ),
+        enabled = enabled,
+        shape = MaterialTheme.shapes.medium,
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                color = Color.White,
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun TruckifyTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    isPassword: Boolean = false,
+    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, style = MaterialTheme.typography.bodyMedium) },
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        leadingIcon = leadingIcon?.let {
+            { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+        },
+        trailingIcon = trailingIcon,
+        visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        keyboardOptions = keyboardOptions,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            cursorColor = MaterialTheme.colorScheme.primary,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        ),
+        textStyle = MaterialTheme.typography.bodyLarge
+    )
+}
 
 @Composable
 fun InfoChip(text: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFF2F4F7))
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+    Surface(
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
     ) {
-        Text(text = text, color = DarkBlue, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-fun ActionCard(title: String, icon: ImageVector, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.size(100.dp).clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
-}
-
-
-@Composable
-fun BottomItem(icon: ImageVector, selected: Boolean) {
-    Box(
-        modifier = Modifier
-            .size(70.dp) // Larger size
-            .clip(RoundedCornerShape(24.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-            .padding(12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.onPrimary else Color.Gray.copy(alpha = 0.6f),
-            modifier = Modifier.size(34.dp) // Larger icons
+        Text(
+            text = text, 
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.primary, 
+            style = MaterialTheme.typography.labelLarge
         )
     }
 }
 
-
 @Composable
 fun StatItem(label: String, value: String) {
     Column {
-        Text(label, color = Color.Gray, fontSize = 12.sp)
-        Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-    }
-}
-
-@Composable
-fun RoleSelectorCard(modifier: Modifier = Modifier, title: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
-    Card(
-        modifier = modifier.height(105.dp).clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = if (selected) DarkBlue else Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 8.dp else 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = if (selected) Color.White else DarkBlue, modifier = Modifier.size(32.dp))
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = title, color = if (selected) Color.White else DarkBlue, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        }
-    }
-}
-
-@Composable
-fun ChatChip(text: String, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = LightBlue.copy(alpha = 0.1f),
-        border = BorderStroke(1.dp, LightBlue.copy(alpha = 0.2f))
-    ) {
-        Text(text = text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontSize = 12.sp, color = LightBlue, fontWeight = FontWeight.Bold)
+        Text(
+            label, 
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value, 
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
 @Composable
 fun RatingDialog(onDismiss: () -> Unit, onSubmit: (Int) -> Unit) {
-    var rating by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var rating by remember { mutableIntStateOf(0) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            Button(
+            TextButton(
                 onClick = { onSubmit(rating) },
-                enabled = rating > 0,
-                colors = ButtonDefaults.buttonColors(containerColor = DarkBlue)
+                enabled = rating > 0
             ) {
-                Text("Submit Rating")
+                Text("Submit Rating", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Skip", color = Color.Gray)
+                Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        title = { Text("Rate the Driver", fontWeight = FontWeight.Bold) },
+        title = { 
+            Text(
+                "Rate the Driver", 
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            ) 
+        },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text("How was your experience with the driver?", color = Color.Gray)
+                Text(
+                    "How was your experience with the driver?", 
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(horizontalArrangement = Arrangement.Center) {
                     (1..5).forEach { index ->
@@ -204,7 +251,7 @@ fun RatingDialog(onDismiss: () -> Unit, onSubmit: (Int) -> Unit) {
                             Icon(
                                 if (index <= rating) Icons.Default.Star else Icons.Default.StarBorder,
                                 contentDescription = null,
-                                tint = if (index <= rating) Color(0xFFFFB300) else Color.Gray,
+                                tint = if (index <= rating) WarningOrange else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(36.dp)
                             )
                         }
@@ -212,7 +259,7 @@ fun RatingDialog(onDismiss: () -> Unit, onSubmit: (Int) -> Unit) {
                 }
             }
         },
-        shape = RoundedCornerShape(28.dp),
-        containerColor = Color.White
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }

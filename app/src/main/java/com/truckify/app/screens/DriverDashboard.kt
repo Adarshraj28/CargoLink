@@ -1,5 +1,6 @@
 package com.truckify.app.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.truckify.app.components.*
@@ -24,12 +26,23 @@ import com.truckify.app.firebase.AuthManager
 import com.truckify.app.firebase.FirestoreManager
 import com.truckify.app.models.Shipment
 import com.truckify.app.ui.theme.*
-
 import java.util.Locale
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.truckify.app.viewmodel.DriverViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -54,17 +67,17 @@ fun DriverDashboard(
     viewModel: DriverViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val loads by viewModel.availableLoads.collectAsState()
-    val activeTrip by viewModel.activeTrip.collectAsState()
-    val userName by viewModel.userName.collectAsState()
-    val rating by viewModel.rating.collectAsState()
-    val truckNumber by viewModel.truckNumber.collectAsState()
-    val todayEarnings by viewModel.todayEarnings.collectAsState()
-    val weekEarnings by viewModel.weekEarnings.collectAsState()
-    val verificationStatus by viewModel.verificationStatus.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val isOnline by viewModel.isOnline.collectAsState()
-    val incomingLoad by viewModel.incomingLoad.collectAsState()
+    val loads by viewModel.availableLoads.collectAsStateWithLifecycle()
+    val activeTrip by viewModel.activeTrip.collectAsStateWithLifecycle()
+    val userName by viewModel.userName.collectAsStateWithLifecycle()
+    val rating by viewModel.rating.collectAsStateWithLifecycle()
+    val truckNumber by viewModel.truckNumber.collectAsStateWithLifecycle()
+    val todayEarnings by viewModel.todayEarnings.collectAsStateWithLifecycle()
+    val weekEarnings by viewModel.weekEarnings.collectAsStateWithLifecycle()
+    val verificationStatus by viewModel.verificationStatus.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+    val incomingLoad by viewModel.incomingLoad.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.loadDashboardData()
@@ -76,42 +89,36 @@ fun DriverDashboard(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = BackgroundWhite,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth().height(80.dp),
-                shadowElevation = 8.dp
+                shadowElevation = 16.dp,
+                tonalElevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    BottomItem(icon = Icons.Default.Home, selected = true)
-                    Box(modifier = Modifier.clickable { onOrdersClick() }) { 
-                        BottomItem(icon = Icons.Default.DirectionsTransit, selected = false) 
-                    }
+                    IconButton(onClick = { }) { BottomItem(icon = Icons.Default.Home, selected = true) }
+                    IconButton(onClick = onOrdersClick) { BottomItem(icon = Icons.Default.DirectionsTransit, selected = false) }
                     
-                    // New Center Quick Action Button for Drivers
                     Box(
                         modifier = Modifier
                             .offset(y = (-10).dp)
-                            .size(64.dp)
+                            .size(60.dp)
                             .clip(CircleShape)
-                            .background(PrimaryBlue)
+                            .background(BlueGradient)
                             .clickable { onSearchClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.Search, contentDescription = "Find Loads", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
 
-                    Box(modifier = Modifier.clickable { onPaymentsClick() }) { 
-                        BottomItem(icon = Icons.Default.AccountBalanceWallet, selected = false) 
-                    }
-                    Box(modifier = Modifier.clickable { onProfileClick() }) { 
-                        BottomItem(icon = Icons.Default.Person, selected = false) 
-                    }
+                    IconButton(onClick = onPaymentsClick) { BottomItem(icon = Icons.Default.AccountBalanceWallet, selected = false) }
+                    IconButton(onClick = onProfileClick) { BottomItem(icon = Icons.Default.Person, selected = false) }
                 }
             }
         }
@@ -124,17 +131,24 @@ fun DriverDashboard(
         ) {
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(text = "Good Morning,", color = TextGray, fontSize = 16.sp)
-                        Text(text = userName, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 28.sp)
+                        Text(text = "Good Morning,", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+                        Text(text = userName, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 28.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = if (isOnline) "Online" else "Offline", color = if (isOnline) SuccessGreen else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (isOnline) "ONLINE" else "OFFLINE", 
+                                color = if (isOnline) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), 
+                                fontSize = 10.sp, 
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Switch(
                                 checked = isOnline,
                                 onCheckedChange = { viewModel.toggleOnlineStatus() },
@@ -142,7 +156,7 @@ fun DriverDashboard(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = SuccessGreen,
                                     uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color.Gray.copy(alpha = 0.5f)
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                                 )
                             )
                         }
@@ -151,14 +165,14 @@ fun DriverDashboard(
                             color = PrimaryBlue.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Star, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(16.dp))
-                                Text(text = String.format(Locale.getDefault(), " %.1f", rating), color = PrimaryBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(text = String.format(Locale.getDefault(), " %.1f", rating), color = PrimaryBlue, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                             }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = onNotificationClick) {
-                            Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.Black)
+                            Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -167,13 +181,19 @@ fun DriverDashboard(
             item {
                 Card(
                     modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Beige.copy(alpha = 0.5f))
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(text = "Truck $truckNumber", color = Color.Black, fontWeight = FontWeight.Medium)
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(color = PrimaryBlue, shape = RoundedCornerShape(8.dp), modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Default.LocalShipping, contentDescription = null, tint = Color.White, modifier = Modifier.padding(8.dp))
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(text = "Active Vehicle", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            Text(text = truckNumber, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
                     }
                 }
             }
@@ -182,26 +202,31 @@ fun DriverDashboard(
                 if (verificationStatus != "Verified") {
                     Card(
                         modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth().clickable { onVerifyClick() },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = if (verificationStatus == "Pending") Color(0xFFFFF3E0) else Color(0xFFFBE9E7))
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (verificationStatus == "Pending") WarningOrange.copy(alpha = 0.1f) else ErrorRed.copy(alpha = 0.1f)
+                        ),
+                        border = BorderStroke(1.dp, if (verificationStatus == "Pending") WarningOrange.copy(alpha = 0.3f) else ErrorRed.copy(alpha = 0.3f))
                     ) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                if (verificationStatus == "Pending") Icons.Default.History else Icons.Default.Warning,
+                                if (verificationStatus == "Pending") Icons.Default.History else Icons.Default.GppMaybe,
                                 contentDescription = null,
-                                tint = if (verificationStatus == "Pending") WarningOrange else ErrorRed
+                                tint = if (verificationStatus == "Pending") WarningOrange else ErrorRed,
+                                modifier = Modifier.size(32.dp)
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(20.dp))
                             Column {
                                 Text(
-                                    text = if (verificationStatus == "Pending") "Verification Pending" else "Verify Identity",
+                                    text = if (verificationStatus == "Pending") "Verification in Progress" else "Account Unverified",
                                     fontWeight = FontWeight.Bold,
-                                    color = if (verificationStatus == "Pending") WarningOrange else ErrorRed
+                                    color = if (verificationStatus == "Pending") WarningOrange else ErrorRed,
+                                    fontSize = 16.sp
                                 )
                                 Text(
-                                    text = if (verificationStatus == "Pending") "Admin is reviewing your docs." else "Upload your license to start taking loads.",
-                                    fontSize = 12.sp,
-                                    color = Color.Black.copy(alpha = 0.6f)
+                                    text = if (verificationStatus == "Pending") "Your documents are being reviewed." else "Upload your documents to start earning.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -209,61 +234,128 @@ fun DriverDashboard(
                 }
             }
 
-            item {
-                if (activeTrip != null) {
+            if (isOnline && activeTrip != null) {
+                item {
+                    SectionHeader(title = "Current Trip")
                     ActiveTripCard(
                         shipmentId = activeTrip!!.id,
-                        origin = activeTrip!!.pickupAddress.split(",").first(),
-                        destination = activeTrip!!.destinationAddress.split(",").first(),
+                        origin = activeTrip!!.pickupAddress,
+                        destination = activeTrip!!.destinationAddress,
+                        pickupLat = activeTrip!!.pickupLat,
+                        pickupLng = activeTrip!!.pickupLng,
+                        destLat = activeTrip!!.destLat,
+                        destLng = activeTrip!!.destLng,
                         status = activeTrip!!.status,
                         onTrackClick = { onTrackClick(it) }
                     )
-                } else {
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SectionHeader(title = "Live Route")
                     Card(
-                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                            .padding(vertical = 8.dp),
                         shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.1f))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                     ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Text("No active trips. Find a load below!", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                        val cameraPositionState = rememberCameraPositionState()
+                        val trip = activeTrip!!
+                        val location = if (trip.currentLat != 0.0) LatLng(trip.currentLat, trip.currentLng) else LatLng(trip.pickupLat, trip.pickupLng)
+                        
+                        LaunchedEffect(location) {
+                            cameraPositionState.position = com.google.android.gms.maps.model.CameraPosition.fromLatLngZoom(location, 14f)
+                        }
+
+                        GoogleMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPositionState = cameraPositionState,
+                            properties = MapProperties(
+                                isMyLocationEnabled = true,
+                                mapStyleOptions = MapStyleOptions("[{\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#242f3e\"}]},{\"elementType\":\"labels.text.fill\",\"stylers\":[{\"color\":\"#746855\"}]},{\"elementType\":\"labels.text.stroke\",\"stylers\":[{\"color\":\"#242f3e\"}]},{\"featureType\":\"administrative.locality\",\"elementType\":\"labels.text.fill\",\"stylers\":[{\"color\":\"#d59563\"}]},{\"featureType\":\"road\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#38414e\"}]},{\"featureType\":\"road\",\"elementType\":\"geometry.stroke\",\"stylers\":[{\"color\":\"#212a37\"}]},{\"featureType\":\"water\",\"elementType\":\"geometry\",\"stylers\":[{\"color\":\"#17263c\"}]}]")
+                            ),
+                            uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false)
+                        ) {
+                            Marker(
+                                state = MarkerState(position = location),
+                                title = "Your Location",
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)
+                            )
+                            Marker(
+                                state = MarkerState(position = LatLng(trip.destLat, trip.destLng)),
+                                title = "Destination"
+                            )
                         }
                     }
                 }
-            }
-
-            item {
-                SectionHeader(title = "AI Load Suggestions", onSeeAll = onSearchClick)
-                if (isLoading) {
-                    LoadingAnimation()
-                } else {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(bottom = 8.dp)
-                    ) {
-                        items(loads) { shipment ->
-                            AILoadSuggestionCard(shipment = shipment, onClick = {
-                                viewModel.acceptLoad(shipment.id, 
-                                    onSuccess = { Toast.makeText(context, "Load Accepted!", Toast.LENGTH_SHORT).show() },
-                                    onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
-                                )
-                            })
+            } else {
+                item {
+                    if (isOnline) {
+                        Card(
+                            modifier = Modifier.padding(top = 16.dp).fillMaxWidth().height(140.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.05f)),
+                            border = BorderStroke(1.dp, PrimaryBlue.copy(alpha = 0.1f))
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().padding(24.dp)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Wifi, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(36.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text("Searching for nearby loads...", color = PrimaryBlue, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Text("We'll notify you as soon as a match is found", color = PrimaryBlue.copy(alpha = 0.7f), fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier.padding(top = 16.dp).fillMaxWidth().height(160.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().padding(24.dp)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(44.dp))
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("You are currently Offline", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                    Text("Go online to start receiving new load requests", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), fontSize = 13.sp, textAlign = TextAlign.Center)
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            item {
-                SectionHeader(title = "Quick Actions")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    QuickActionBtn("Find Load", Icons.Default.Search, PrimaryBlue, onSearchClick)
-                    QuickActionBtn("Expenses", Icons.Default.Receipt, Color(0xFF6366F1), onExpenseClick)
-                    QuickActionBtn("SOS", Icons.Default.Warning, ErrorRed, {
-                        Toast.makeText(context, "Emergency SOS triggered! Help is on the way.", Toast.LENGTH_LONG).show()
-                    })
-                    QuickActionBtn("Wallet", Icons.Default.AccountBalanceWallet, SuccessGreen, onPaymentsClick)
+                item {
+                    if (isOnline) {
+                        SectionHeader(title = "Smart Suggestions", onSeeAll = onSearchClick)
+                        if (isLoading) {
+                            Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = PrimaryBlue, strokeWidth = 3.dp)
+                            }
+                        } else {
+                            if (loads.isEmpty()) {
+                                Text("No loads matching your truck currently.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 30.dp), textAlign = TextAlign.Center)
+                            } else {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(vertical = 8.dp)
+                                ) {
+                                    items(loads, key = { it.id }) { shipment ->
+                                        AILoadSuggestionCard(shipment = shipment, onClick = {
+                                            viewModel.acceptLoad(shipment.id, 
+                                                onSuccess = { Toast.makeText(context, "Load Accepted!", Toast.LENGTH_SHORT).show() },
+                                                onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                                            )
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -271,41 +363,44 @@ fun DriverDashboard(
                 SectionHeader(title = "Earnings Overview")
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                        modifier = Modifier.padding(24.dp).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column {
-                                Text(text = "Today", color = TextGray, fontSize = 12.sp)
-                                Text(text = String.format(Locale.getDefault(), "₹%.0f", todayEarnings), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.Black)
+                                Text(text = "TODAY", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Text(text = String.format(Locale.getDefault(), "₹%.0f", todayEarnings), fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurface)
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(20.dp))
                             MiniEarningsChart()
                         }
-                        Box(modifier = Modifier.width(1.dp).height(40.dp).background(TextGray.copy(alpha = 0.2f)))
+                        Box(modifier = Modifier.width(1.dp).height(40.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)))
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(text = "This Week", color = TextGray, fontSize = 12.sp)
-                            Text(text = String.format(Locale.getDefault(), "₹%.0f", weekEarnings), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.Black)
+                            Text(text = "THIS WEEK", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Text(text = String.format(Locale.getDefault(), "₹%.0f", weekEarnings), fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, color = SuccessGreen)
                         }
                     }
                 }
             }
+            
+            item { Spacer(modifier = Modifier.height(100.dp)) }
         }
         
         // Chat FAB
-        Box(modifier = Modifier.fillMaxSize().padding(bottom = 100.dp, end = 20.dp), contentAlignment = Alignment.BottomEnd) {
+        Box(modifier = Modifier.fillMaxSize().padding(bottom = 20.dp, end = 20.dp), contentAlignment = Alignment.BottomEnd) {
             FloatingActionButton(
                 onClick = onChatbotClick,
                 containerColor = PrimaryBlue,
                 contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp)
+                shape = RoundedCornerShape(16.dp),
+                elevation = FloatingActionButtonDefaults.elevation(8.dp)
             ) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assistant")
             }
@@ -335,12 +430,11 @@ fun SwipeableLoadRequestPopup(
     onDecline: () -> Unit
 ) {
     var offsetX by remember { mutableStateOf(0f) }
-    val maxOffset = 500f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
+            .background(Color.Black.copy(alpha = 0.8f))
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -351,9 +445,9 @@ fun SwipeableLoadRequestPopup(
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
-                            if (offsetX > 150f) {
+                            if (offsetX > 200f) {
                                 onAccept()
-                            } else if (offsetX < -150f) {
+                            } else if (offsetX < -200f) {
                                 onDecline()
                             }
                             offsetX = 0f
@@ -365,51 +459,65 @@ fun SwipeableLoadRequestPopup(
                     )
                 },
             shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 20.dp)
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Surface(
                     color = PrimaryBlue.copy(alpha = 0.1f),
                     shape = CircleShape,
-                    modifier = Modifier.size(60.dp)
+                    modifier = Modifier.size(72.dp)
                 ) {
-                    Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.padding(15.dp))
+                    Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.padding(18.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("New Load Available!", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = Color.Black)
-                Text("Swipe to take action", color = Color.Gray, fontSize = 14.sp)
                 
                 Spacer(modifier = Modifier.height(24.dp))
+                Text("New Load Found!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+                Text("Swipe right to Accept • Left to Decline", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                
+                Spacer(modifier = Modifier.height(32.dp))
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
-                        Text("FROM", color = TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text(shipment.pickupAddress.split(",").first(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("PICKUP", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        LocationText(
+                            lat = shipment.pickupLat,
+                            lng = shipment.pickupLng,
+                            defaultAddress = shipment.pickupAddress,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = PrimaryBlue)
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("TO", color = TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text(shipment.destinationAddress.split(",").first(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.padding(horizontal = 12.dp).size(20.dp))
+                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                        Text("DROP", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        LocationText(
+                            lat = shipment.destLat,
+                            lng = shipment.destLng,
+                            defaultAddress = shipment.destinationAddress,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(20.dp))
-                HorizontalDivider(color = Color.Gray.copy(alpha = 0.1f))
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text("PAYMENT", color = TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text(text = shipment.price, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = SuccessGreen)
+                        Text("OFFERED PRICE", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text(text = shipment.price, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = SuccessGreen)
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("WEIGHT", color = TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text(text = shipment.weight, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("WEIGHT", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text(text = shipment.weight, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 
@@ -417,18 +525,34 @@ fun SwipeableLoadRequestPopup(
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(16.dp))
-                        Text(" Decline", color = ErrorRed, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = onDecline,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ErrorRed.copy(alpha = 0.1f), contentColor = ErrorRed)
+                    ) {
+                        Text("Decline", fontWeight = FontWeight.ExtraBold)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Accept ", color = SuccessGreen, fontWeight = FontWeight.Bold)
-                        Icon(Icons.Default.ArrowForward, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                    Button(
+                        onClick = onAccept,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+                    ) {
+                        Text("Accept Load", fontWeight = FontWeight.ExtraBold)
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                LinearProgressIndicator(
+                    progress = { (offsetX.coerceIn(-200f, 200f) + 200f) / 400f },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                    color = if (offsetX > 0) SuccessGreen else if (offsetX < 0) ErrorRed else PrimaryBlue,
+                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
             }
         }
     }

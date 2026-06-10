@@ -2,8 +2,11 @@ package com.truckify.app.navigation
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
+    object Onboarding : Screen("onboarding")
+    object RoleSelection : Screen("role_selection")
     object Welcome : Screen("welcome")
     object Login : Screen("login")
+    object PhoneLogin : Screen("phone_login")
     object Signup : Screen("signup")
     object Home : Screen("home")
     object Notifications : Screen("notifications")
@@ -30,4 +33,5 @@ sealed class Screen(val route: String) {
     object EditProfile : Screen("edit_profile")
     object Terms : Screen("terms")
     object Support : Screen("support")
+    object Confirming : Screen("confirming")
 }

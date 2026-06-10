@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.truckify.app.components.InfoChip
+import com.truckify.app.components.LocationText
 import com.truckify.app.firebase.AuthManager
 import com.truckify.app.firebase.FirestoreManager
 import com.truckify.app.models.Shipment
@@ -98,11 +99,11 @@ fun LoadDetailsScreen(shipmentId: String, onBack: () -> Unit, onAccepted: () -> 
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
-                        RoutePoint(Icons.Default.RadioButtonChecked, "Pickup", s.pickupAddress, LightBlue)
+                        RoutePoint(Icons.Default.RadioButtonChecked, "Pickup", s.pickupAddress, s.pickupLat, s.pickupLng, LightBlue)
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(modifier = Modifier.padding(start = 11.dp).width(2.dp).height(30.dp).background(Color.LightGray))
                         Spacer(modifier = Modifier.height(8.dp))
-                        RoutePoint(Icons.Default.LocationOn, "Destination", s.destinationAddress, Color.Red)
+                        RoutePoint(Icons.Default.LocationOn, "Destination", s.destinationAddress, s.destLat, s.destLng, Color.Red)
                     }
                 }
 
@@ -186,13 +187,20 @@ fun LoadDetailsScreen(shipmentId: String, onBack: () -> Unit, onAccepted: () -> 
 }
 
 @Composable
-fun RoutePoint(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, address: String, color: Color) {
+fun RoutePoint(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, address: String, lat: Double, lng: Double, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column {
             Text(label, color = Color.Gray, fontSize = 12.sp)
-            Text(address, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DarkBlue, maxLines = 1)
+            LocationText(
+                lat = lat,
+                lng = lng,
+                defaultAddress = address,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = DarkBlue
+            )
         }
     }
 }

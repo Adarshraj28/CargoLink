@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,11 +43,18 @@ import com.truckify.app.firebase.AuthManager
 import com.truckify.app.firebase.FirestoreManager
 import com.truckify.app.models.Shipment
 import com.truckify.app.ui.theme.*
+import com.truckify.app.utils.getFriendlyAddress
 import com.truckify.app.utils.NetworkUtils
 import java.util.Locale
 
 import com.truckify.app.firebase.GeminiManager
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
+import com.truckify.app.utils.PriceEstimator
+import com.truckify.app.utils.calculateDistance
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +78,32 @@ fun CreateShipmentScreen(onBack: () -> Unit, onPostSuccess: (String) -> Unit = {
     var optimizationResult by remember { mutableStateOf<String?>(null) }
 
     var selectingField by rememberSaveable { mutableStateOf("pickup") }
+
+    val estimation = remember(pickupLat, pickupLng, destLat, destLng, truckType, weightInput) {
+        if (pickupLat != 0.0 && destLat != 0.0) {
+            val dist = calculateDistance(pickupLat, pickupLng, destLat, destLng)
+            val weight = weightInput.toDoubleOrNull() ?: 5.0
+            PriceEstimator.estimatePrice(dist, weight, truckType)
+        } else null
+    }
+
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                if (location != null && pickup.isEmpty()) {
+                    pickupLat = location.latitude
+                    pickupLng = location.longitude
+                    coroutineScope.launch {
+                        val friendly = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            getFriendlyAddress(context, location.latitude, location.longitude)
+                        }
+                        pickup = friendly
+                    }
+                }
+            }
+        }
+    }
 
     val pickupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -128,19 +163,8 @@ fun CreateShipmentScreen(onBack: () -> Unit, onPostSuccess: (String) -> Unit = {
                 cameraPositionState = cameraPositionState,
                 onMapClick = { latLng ->
                     coroutineScope.launch {
-                        val geocoder = android.location.Geocoder(context, Locale.getDefault())
-                        val address = try {
-                            // Run geocoding in a background dispatcher
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                val addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
-                                if (addresses != null && addresses.isNotEmpty()) {
-                                    addresses[0].getAddressLine(0)
-                                } else {
-                                    "${String.format(Locale.getDefault(), "%.4f", latLng.latitude)}, ${String.format(Locale.getDefault(), "%.4f", latLng.longitude)}"
-                                }
-                            }
-                        } catch (e: Exception) {
-                            "${String.format(Locale.getDefault(), "%.4f", latLng.latitude)}, ${String.format(Locale.getDefault(), "%.4f", latLng.longitude)}"
+                        val address = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            getFriendlyAddress(context, latLng.latitude, latLng.longitude)
                         }
 
                         if (selectingField == "pickup") {
@@ -161,12 +185,20 @@ fun CreateShipmentScreen(onBack: () -> Unit, onPostSuccess: (String) -> Unit = {
             }
 
             Card(
-                modifier = Modifier.align(Alignment.BottomCenter).padding(20.dp).fillMaxWidth(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(20.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp), // Limit height so it doesn't cover whole map
                 shape = RoundedCornerShape(32.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 20.dp)
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                     Text(text = "Plan Your Trip", fontWeight = FontWeight.ExtraBold, fontSize = 28.sp, color = DarkBlue)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(text = "Select your mode of trip", color = Color.Gray)
@@ -281,6 +313,37 @@ fun CreateShipmentScreen(onBack: () -> Unit, onPostSuccess: (String) -> Unit = {
 
                     if (pickup.isNotEmpty() && destination.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
+                        Text("Truck & Load Details", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            var expanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.weight(1f)) {
+                                OutlinedButton(
+                                    onClick = { expanded = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(truckType, maxLines = 1)
+                                }
+                                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                    listOf("Mini Truck", "Pick-up", "Mid-size", "Heavy Duty").forEach { type ->
+                                        DropdownMenuItem(
+                                            text = { Text(type) },
+                                            onClick = { truckType = type; expanded = false }
+                                        )
+                                    }
+                                }
+                            }
+                            OutlinedTextField(
+                                value = weightInput,
+                                onValueChange = { weightInput = it },
+                                modifier = Modifier.weight(1f),
+                                label = { Text("Weight (Tons)") },
+                                shape = RoundedCornerShape(12.dp),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
                                 isPredicting = true
@@ -315,27 +378,68 @@ fun CreateShipmentScreen(onBack: () -> Unit, onPostSuccess: (String) -> Unit = {
                         }
                     }
 
+                    if (estimation != null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.05f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Estimated Fare", fontWeight = FontWeight.Bold, color = DarkBlue)
+                                    Text("₹${String.format("%.0f", estimation.totalPrice)}", fontWeight = FontWeight.ExtraBold, color = DarkBlue, fontSize = 18.sp)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Distance", fontSize = 12.sp, color = Color.Gray)
+                                    Text("${String.format("%.1f", estimation.distance)} km", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Platform Fee (10%)", fontSize = 12.sp, color = Color.Gray)
+                                    Text("₹${String.format("%.0f", estimation.commission)}", fontSize = 12.sp, color = Color.Gray)
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray.copy(alpha = 0.1f))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Driver Payout", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                                    Text("₹${String.format("%.0f", estimation.driverPayout)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
                     var loading by remember { mutableStateOf(false) }
+                    val canPost = pickup.isNotEmpty() && destination.isNotEmpty() && pickupLat != 0.0 && destLat != 0.0 && !loading
+                    
                     Button(
                         onClick = {
                             if (!NetworkUtils.isInternetAvailable(context)) {
                                 Toast.makeText(context, "No Internet Connection", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            if (pickupLat == 0.0 || destLat == 0.0) { Toast.makeText(context, "Please set both locations", Toast.LENGTH_SHORT).show(); return@Button }
+                            if (!canPost) {
+                                Toast.makeText(context, "Please complete all location details", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            
                             loading = true
-                            val shipment = Shipment(
+                            
+                            val finalShipment = Shipment(
                                 vendorEmail = AuthManager.getCurrentUserEmail() ?: "",
                                 pickupAddress = pickup,
                                 destinationAddress = destination,
                                 pickupLat = pickupLat, pickupLng = pickupLng,
                                 destLat = destLat, destLng = destLng,
-                                price = "₹${(20000..50000).random()}",
-                                weight = "${(1..10).random()} Tons",
+                                price = "₹${String.format(Locale.getDefault(), "%.0f", estimation?.totalPrice ?: 0.0)}",
+                                commission = estimation?.commission ?: 0.0,
+                                driverPayout = estimation?.driverPayout ?: 0.0,
+                                weight = "$weightInput Tons",
+                                truckType = truckType,
                                 timestamp = System.currentTimeMillis()
                             )
-                            FirestoreManager.postShipment(shipment, 
+                            
+                            FirestoreManager.postShipment(finalShipment,
                                 onSuccess = { id ->
                                     loading = false
                                     Toast.makeText(context, "Shipment Posted Successfully!", Toast.LENGTH_LONG).show()
@@ -348,8 +452,12 @@ fun CreateShipmentScreen(onBack: () -> Unit, onPostSuccess: (String) -> Unit = {
                             )
                         },
                         modifier = Modifier.fillMaxWidth().height(60.dp),
+                        enabled = canPost,
                         shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkBlue)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (canPost) DarkBlue else Color.Gray,
+                            contentColor = Color.White
+                        )
                     ) {
                         if (loading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                         else Text(text = "Confirm & Post Shipment", fontSize = 18.sp, fontWeight = FontWeight.Bold)

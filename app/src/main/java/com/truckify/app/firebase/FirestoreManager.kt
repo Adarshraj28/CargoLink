@@ -25,6 +25,7 @@ object FirestoreManager {
             "successfulScans" to 0,
             "accidentCount" to 0,
             "cancellationsCount" to 0,
+            "isPhoneVerified" to false,
             "verificationStatus" to "Not Started"
         )
         db.collection("users").document(cleanEmail).set(user)
@@ -35,7 +36,9 @@ object FirestoreManager {
         val docRef = db.collection("shipments").document()
         val finalShipment = shipment.copy(
             id = docRef.id,
-            podToken = java.util.UUID.randomUUID().toString()
+            podToken = java.util.UUID.randomUUID().toString(),
+            deliveryOtp = (100000..999999).random().toString(),
+            otpTimestamp = System.currentTimeMillis()
         )
         docRef.set(finalShipment)
             .addOnSuccessListener {
@@ -55,13 +58,22 @@ object FirestoreManager {
                     }
                 }
                 onSuccess(docRef.id)
+                
+                // Notify Vendor with OTP
+                sendInternalNotification(
+                    shipment.vendorEmail,
+                    "Shipment Posted",
+                    "Your shipment #${docRef.id.takeLast(4).uppercase()} has been posted. Delivery OTP: ${finalShipment.deliveryOtp}"
+                )
             }
             .addOnFailureListener { onError(it.message ?: "Failed to post") }
     }
 
     fun getAvailableLoads(onResult: (List<Shipment>) -> Unit): ListenerRegistration {
+        val twentyFourHoursAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
         return db.collection("shipments")
             .whereEqualTo("status", "Available")
+            .whereGreaterThan("timestamp", twentyFourHoursAgo)
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { value, error ->
                 if (error != null) {
@@ -78,18 +90,22 @@ object FirestoreManager {
     }
 
     fun getActiveShipments(email: String, onResult: (List<Shipment>) -> Unit): ListenerRegistration {
+        // Use a more generous time window or just rely on status for active shipments
+        // For a production app, you'd want to index these queries
         return db.collection("shipments")
-            .whereEqualTo("vendorEmail", email)
             .whereIn("status", listOf("In Transit", "Available"))
             .addSnapshotListener { value, error ->
                 if (error != null) {
                     android.util.Log.e("FirestoreManager", "getActiveShipments Error: ${error.message}")
+                    onResult(emptyList())
                     return@addSnapshotListener
                 }
                 if (value != null) {
                     val shipments = value.documents.mapNotNull { doc ->
                         doc.toObject(Shipment::class.java)?.copy(id = doc.id)
-                    }
+                    }.filter { 
+                        it.vendorEmail == email || it.driverEmail == email
+                    }.sortedByDescending { it.timestamp }
                     onResult(shipments)
                 }
             }
@@ -103,6 +119,7 @@ object FirestoreManager {
             .addSnapshotListener { value, error ->
                 if (error != null) {
                     android.util.Log.e("FirestoreManager", "getShipmentHistory Error: ${error.message}")
+                    onResult(emptyList())
                     return@addSnapshotListener
                 }
                 if (value != null) {
@@ -118,18 +135,16 @@ object FirestoreManager {
         return db.collection("shipments")
             .whereEqualTo("status", "Available")
             .whereGreaterThan("timestamp", startTime)
-            .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { value, error ->
                 if (error != null) {
                     android.util.Log.e("FirestoreManager", "listenForNewLoads Error: ${error.message}")
                     return@addSnapshotListener
                 }
-                val docs = value?.documents ?: return@addSnapshotListener
-                for (doc in docs) {
-                    val shipment = doc.toObject(Shipment::class.java)?.copy(id = doc.id)
-                    if (shipment != null) {
+                val docs = value?.documentChanges ?: return@addSnapshotListener
+                for (change in docs) {
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                        val shipment = change.document.toObject(Shipment::class.java).copy(id = change.document.id)
                         onNewLoad(shipment)
-                        break // We only want to handle the newest one for the popup
                     }
                 }
             }
@@ -147,59 +162,91 @@ object FirestoreManager {
                 return@addOnSuccessListener
             }
 
-            db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
-                val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener onError("Shipment not found")
-                
-                if (shipment.status != "Available") {
-                    onError("Shipment no longer available")
-                    return@addOnSuccessListener
-                }
+            val driverCapacityStr = userDoc.getString("capacity") ?: "0 Tons"
+            val driverCapacity = driverCapacityStr.split(" ").firstOrNull()?.toDoubleOrNull() ?: 0.0
 
-                val vendorEmail = shipment.vendorEmail
-                val cleanPrice = shipment.price.replace("₹", "").replace(",", "").toDoubleOrNull() ?: 0.0
-
-                db.runTransaction { transaction ->
-                    val shipmentRef = db.collection("shipments").document(shipmentId)
-                    val currentShipment = transaction.get(shipmentRef).toObject(Shipment::class.java)
-                    
-                    if (currentShipment?.status != "Available") {
-                        throw Exception("Shipment already taken")
+            // Check for existing active shipments first
+            db.collection("shipments").whereEqualTo("driverEmail", driverEmail)
+                .whereEqualTo("status", "In Transit").get().addOnSuccessListener { activeTrips ->
+                    if (!activeTrips.isEmpty) {
+                        onError("You already have an active shipment. Complete it first.")
+                        return@addOnSuccessListener
                     }
 
-                    transaction.update(shipmentRef, mapOf(
-                        "status" to "In Transit",
-                        "driverEmail" to driverEmail
-                    ))
-
-                    if (shipment.paymentMode != "COD" && cleanPrice > 0) {
-                        val vendorWalletRef = db.collection("wallets").document(vendorEmail)
-                        val vendorWalletDoc = transaction.get(vendorWalletRef)
-                        val currentBalance = vendorWalletDoc.getDouble("balance") ?: 0.0
+                    // Then check the target shipment
+                    db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
+                        val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener onError("Shipment not found")
                         
-                        if (currentBalance >= cleanPrice) {
-                            transaction.update(vendorWalletRef, "balance", currentBalance - cleanPrice)
-                            
-                            val txnId = db.collection("transactions").document().id
-                            val escrowTxn = mapOf(
-                                "id" to txnId,
-                                "userEmail" to vendorEmail,
-                                "shipmentId" to shipmentId,
-                                "amount" to cleanPrice,
-                                "type" to "Escrow Payment",
-                                "status" to "Escrow",
-                                "timestamp" to System.currentTimeMillis()
-                            )
-                            transaction.set(db.collection("transactions").document(txnId), escrowTxn)
-                            transaction.update(shipmentRef, "paymentStatus", "Escrowed")
-                        } else {
-                            throw Exception("Insufficient Vendor Balance")
+                        if (shipment.status != "Available") {
+                            onError("Shipment no longer available")
+                            return@addOnSuccessListener
                         }
-                    }
-                }.addOnSuccessListener {
-                    sendInternalNotification(vendorEmail, "Load Accepted", "Driver $driverEmail has accepted your shipment #$shipmentId.")
-                    onSuccess()
-                }.addOnFailureListener { onError(it.message ?: "Failed to accept") }
-            }
+
+                        val shipmentWeight = shipment.weight.split(" ").firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        if (shipmentWeight > driverCapacity) {
+                            onError("This load exceeds your truck's capacity ($driverCapacityStr).")
+                            return@addOnSuccessListener
+                        }
+
+                        val vendorEmail = shipment.vendorEmail
+                        val cleanPrice = shipment.price.replace("₹", "").replace(",", "").toDoubleOrNull() ?: 0.0
+
+                        db.runTransaction { transaction ->
+                            val shipmentRef = db.collection("shipments").document(shipmentId)
+                            val currentShipment = transaction.get(shipmentRef).toObject(Shipment::class.java)
+                            
+                            if (currentShipment?.status != "Available") {
+                                throw Exception("Shipment already taken")
+                            }
+
+                            transaction.update(shipmentRef, mapOf(
+                                "status" to "In Transit",
+                                "driverEmail" to driverEmail
+                            ))
+
+                            if (shipment.paymentMode != "COD" && cleanPrice > 0) {
+                                val vendorWalletRef = db.collection("wallets").document(vendorEmail)
+                                val vendorWalletDoc = transaction.get(vendorWalletRef)
+                                val currentBalance = vendorWalletDoc.getDouble("balance") ?: 0.0
+                                
+                                if (currentBalance >= cleanPrice) {
+                                    transaction.update(vendorWalletRef, "balance", currentBalance - cleanPrice)
+                                    
+                                    val txnId = db.collection("transactions").document().id
+                                    val escrowTxn = mapOf(
+                                        "id" to txnId,
+                                        "userEmail" to vendorEmail,
+                                        "shipmentId" to shipmentId,
+                                        "amount" to cleanPrice,
+                                        "type" to "Escrow Payment",
+                                        "status" to "Escrow",
+                                        "timestamp" to System.currentTimeMillis()
+                                    )
+                                    transaction.set(db.collection("transactions").document(txnId), escrowTxn)
+                                    transaction.update(shipmentRef, "paymentStatus", "Escrowed")
+                                } else {
+                                    throw Exception("Insufficient Vendor Balance")
+                                }
+                            }
+                        }.addOnSuccessListener {
+                            sendInternalNotification(vendorEmail, "Load Accepted", "Driver $driverEmail has accepted your shipment #$shipmentId.")
+                            
+                            // Also notify Driver with the details and OTP for completion
+                            db.collection("shipments").document(shipmentId).get().addOnSuccessListener { sDoc ->
+                                val s = sDoc.toObject(Shipment::class.java)
+                                if (s != null) {
+                                    sendInternalNotification(
+                                        driverEmail,
+                                        "Load Accepted",
+                                        "You've accepted the load to ${s.destinationAddress.split(",").first()}. Delivery OTP: ${s.deliveryOtp}"
+                                    )
+                                }
+                            }
+
+                            onSuccess()
+                        }.addOnFailureListener { onError(it.message ?: "Failed to accept") }
+                    }.addOnFailureListener { onError(it.message ?: "Could not fetch shipment details") }
+                }.addOnFailureListener { onError(it.message ?: "Could not verify active trips") }
         }.addOnFailureListener { onError(it.message ?: "Connection error") }
     }
 
@@ -211,6 +258,11 @@ object FirestoreManager {
             updateDriverStats(driverEmail, cancellation = true)
             onSuccess()
         }
+    }
+
+    fun cancelShipment(shipmentId: String, onSuccess: () -> Unit) {
+        if (shipmentId.isBlank()) return
+        db.collection("shipments").document(shipmentId).delete().addOnSuccessListener { onSuccess() }
     }
 
     fun completeShipment(shipmentId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
@@ -251,6 +303,14 @@ object FirestoreManager {
         }
         db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
             val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener
+            
+            // Check if OTP is expired (e.g., 10 minutes)
+            val isExpired = System.currentTimeMillis() - shipment.otpTimestamp > 10 * 60 * 1000
+            if (isExpired) {
+                onError("OTP has expired. Please ask the sender to resend.")
+                return@addOnSuccessListener
+            }
+
             if (shipment.deliveryOtp == otp) {
                 db.collection("shipments").document(shipmentId)
                     .update(mapOf(
@@ -319,6 +379,17 @@ object FirestoreManager {
         db.collection("notifications").add(notification)
     }
 
+    fun resendDeliveryOtp(shipmentId: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        val newOtp = (100000..999999).random().toString()
+        val timestamp = System.currentTimeMillis()
+        db.collection("shipments").document(shipmentId).update(mapOf(
+            "deliveryOtp" to newOtp,
+            "otpTimestamp" to timestamp
+        )).addOnSuccessListener {
+            onSuccess(newOtp)
+        }.addOnFailureListener { onError(it.message ?: "Failed to resend") }
+    }
+
     fun getUserData(email: String, onResult: (Map<String, Any>?) -> Unit) {
         val cleanEmail = email.lowercase().trim()
         db.collection("users").document(cleanEmail).get()
@@ -363,6 +434,7 @@ object FirestoreManager {
             .addSnapshotListener { value, error ->
                 if (error != null) {
                     android.util.Log.e("FirestoreManager", "getNotifications Error: ${error.message}")
+                    onResult(emptyList())
                     return@addSnapshotListener
                 }
                 if (value != null) {
@@ -482,18 +554,33 @@ object FirestoreManager {
                             val driverWalletDoc = transaction.get(driverWalletRef)
                             val currentBalance = if (driverWalletDoc.exists()) driverWalletDoc.getDouble("balance") ?: 0.0 else 0.0
                             
-                            transaction.set(driverWalletRef, mapOf("balance" to currentBalance + txn.amount), com.google.firebase.firestore.SetOptions.merge())
+                            val payoutAmount = sDoc.getDouble("driverPayout") ?: (txn.amount * 0.9) // Fallback to 90% if field missing
+                            
+                            transaction.set(driverWalletRef, mapOf("balance" to currentBalance + payoutAmount), com.google.firebase.firestore.SetOptions.merge())
                             transaction.update(db.collection("transactions").document(txn.id), "status", "Success")
                             
                             val payoutId = db.collection("transactions").document().id
                             val payoutTxn = txn.copy(
                                 id = payoutId,
                                 userEmail = driverEmail,
+                                amount = payoutAmount,
                                 type = "Payout",
                                 status = "Success",
                                 timestamp = System.currentTimeMillis()
                             )
                             transaction.set(db.collection("transactions").document(payoutId), payoutTxn)
+                            
+                            // Log commission
+                            val commissionAmount = sDoc.getDouble("commission") ?: (txn.amount * 0.1)
+                            val commissionId = db.collection("transactions").document().id
+                            val commissionTxn = hashMapOf(
+                                "id" to commissionId,
+                                "type" to "Platform Commission",
+                                "shipmentId" to shipmentId,
+                                "amount" to commissionAmount,
+                                "timestamp" to System.currentTimeMillis()
+                            )
+                            transaction.set(db.collection("platform_earnings").document(commissionId), commissionTxn)
                         }
                     }
                 }
@@ -520,6 +607,7 @@ object FirestoreManager {
             .addSnapshotListener { value, error ->
                 if (error != null) {
                     android.util.Log.e("FirestoreManager", "Error fetching transaction history: ${error.message}")
+                    onResult(emptyList())
                     return@addSnapshotListener
                 }
                 if (value != null) {
@@ -634,6 +722,18 @@ object FirestoreManager {
             .addSnapshotListener { value, _ ->
                 value?.toObject(Shipment::class.java)?.copy(id = value.id)?.let { onUpdate(it) }
             }
+    }
+
+    fun assignDriverToShipment(shipmentId: String, driverEmail: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        db.collection("shipments").document(shipmentId)
+            .update(mapOf(
+                "driverEmail" to driverEmail
+            ))
+            .addOnSuccessListener {
+                sendInternalNotification(driverEmail, "Load Assigned", "A vendor has assigned you to shipment #$shipmentId")
+                onSuccess()
+            }
+            .addOnFailureListener { onError(it.message ?: "Unknown error") }
     }
 
     fun getSmartMatches(shipmentId: String, onResult: (List<Driver>) -> Unit) {

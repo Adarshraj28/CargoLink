@@ -36,6 +36,20 @@ class OrdersViewModel : ViewModel() {
         }
     }
 
+    fun repostShipment(shipment: Shipment, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        val newShipment = shipment.copy(
+            id = "", // Will be set by Firestore
+            status = "Available",
+            driverEmail = "",
+            timestamp = System.currentTimeMillis(),
+            paymentStatus = "Pending",
+            escrowTxnId = "",
+            pickupTime = 0,
+            deliveryTime = 0
+        )
+        FirestoreManager.postShipment(newShipment, onSuccess, onError)
+    }
+
     override fun onCleared() {
         super.onCleared()
         shipmentsListener?.remove()

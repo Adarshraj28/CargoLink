@@ -1,6 +1,5 @@
 package com.truckify.app.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,94 +29,35 @@ import com.truckify.app.ui.theme.*
 fun KPICard(title: String, value: String, icon: ImageVector, color: Color) {
     Card(
         modifier = Modifier
-            .padding(8.dp)
-            .width(160.dp),
+            .padding(vertical = 8.dp)
+            .width(150.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(color.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
+        Column(modifier = Modifier.padding(20.dp)) {
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = color.copy(alpha = 0.1f)
             ) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = value, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color.Black)
-            Text(text = title, fontSize = 12.sp, color = TextGray)
-        }
-    }
-}
-
-@Composable
-fun MiniEarningsChart() {
-    Canvas(modifier = Modifier.size(60.dp, 30.dp)) {
-        val path = Path().apply {
-            moveTo(0f, size.height * 0.8f)
-            lineTo(size.width * 0.2f, size.height * 0.6f)
-            lineTo(size.width * 0.4f, size.height * 0.7f)
-            lineTo(size.width * 0.6f, size.height * 0.3f)
-            lineTo(size.width * 0.8f, size.height * 0.4f)
-            lineTo(size.width, size.height * 0.1f)
-        }
-        drawPath(
-            path = path,
-            color = SuccessGreen,
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-        )
-    }
-}
-
-@Composable
-fun LegendItem(label: String, count: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label, fontSize = 12.sp, color = TextGray, modifier = Modifier.width(80.dp))
-        Text(text = count, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-    }
-}
-
-@Composable
-fun ShipmentDonutChart() {
-    Box(contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(100.dp)) {
-            drawArc(
-                color = PrimaryBlue,
-                startAngle = -90f,
-                sweepAngle = 180f,
-                useCenter = false,
-                style = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = value, 
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 20.sp
             )
-            drawArc(
-                color = SuccessGreen,
-                startAngle = 90f,
-                sweepAngle = 120f,
-                useCenter = false,
-                style = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
+            Text(
+                text = title, 
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            drawArc(
-                color = WarningOrange,
-                startAngle = 210f,
-                sweepAngle = 30f,
-                useCenter = false,
-                style = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = Color.LightGray.copy(alpha = 0.3f),
-                startAngle = 240f,
-                sweepAngle = 30f,
-                useCenter = false,
-                style = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("128", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
-            Text("Total", fontSize = 10.sp, color = TextGray)
         }
     }
 }
@@ -126,14 +66,15 @@ fun ShipmentDonutChart() {
 fun QuickActionBtn(title: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(75.dp)
+        modifier = Modifier.width(80.dp)
     ) {
         Surface(
             modifier = Modifier
                 .size(64.dp)
                 .clickable { onClick() },
             shape = RoundedCornerShape(20.dp),
-            color = color.copy(alpha = 0.1f)
+            color = color.copy(alpha = 0.1f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f))
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
@@ -141,11 +82,11 @@ fun QuickActionBtn(title: String, icon: ImageVector, color: Color, onClick: () -
         }
         Text(
             text = title,
-            modifier = Modifier.padding(top = 8.dp),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.Black,
-            textAlign = TextAlign.Center
+            modifier = Modifier.padding(top = 10.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium
         )
     }
 }
@@ -155,91 +96,24 @@ fun SectionHeader(title: String, onSeeAll: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp),
+            .padding(top = 24.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Bold
         )
         if (onSeeAll != null) {
             Text(
                 text = "View All",
                 modifier = Modifier.clickable { onSeeAll() },
                 color = PrimaryBlue,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
             )
-        }
-    }
-}
-
-@Composable
-fun AILoadSuggestionCard(shipment: Shipment, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .width(280.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = shipment.price,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp,
-                    color = PrimaryBlue
-                )
-                Surface(
-                    color = SuccessGreen.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "92% Match",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = SuccessGreen,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(PrimaryBlue))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = shipment.pickupAddress.split(",").first(), fontWeight = FontWeight.SemiBold, color = Color.Black)
-            }
-            
-            Box(modifier = Modifier.padding(start = 3.dp).width(2.dp).height(12.dp).background(TextGray.copy(alpha = 0.3f)))
-            
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(WarningOrange))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = shipment.destinationAddress.split(",").first(), fontWeight = FontWeight.SemiBold, color = Color.Black)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Button(
-                onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                Text("Accept", fontWeight = FontWeight.Bold)
-            }
         }
     }
 }
@@ -249,44 +123,92 @@ fun ActiveTripCard(
     shipmentId: String = "",
     origin: String = "Delhi",
     destination: String = "Jaipur",
+    pickupLat: Double = 0.0,
+    pickupLng: Double = 0.0,
+    destLat: Double = 0.0,
+    destLng: Double = 0.0,
     eta: String = "2h 15m",
     status: String = "In Transit",
-    onTrackClick: (String) -> Unit
+    onTrackClick: (String) -> Unit,
+    onQrClick: (String) -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = PrimaryBlue),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.background(BlueGradient).padding(24.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(text = "Current Trip", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = origin, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.padding(horizontal = 8.dp).size(16.dp))
-                        Text(text = destination, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    }
-                }
-                Surface(
-                    color = Color.White.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
                     Text(
-                        text = status,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = Color.White,
-                        fontSize = 12.sp,
+                        text = "Current Trip", 
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.8f),
                         fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LocationText(
+                            lat = pickupLat,
+                            lng = pickupLng,
+                            defaultAddress = origin,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        Icon(
+                            Icons.Default.ArrowForward, 
+                            contentDescription = null, 
+                            tint = Color.White.copy(alpha = 0.6f), 
+                            modifier = Modifier.padding(horizontal = 8.dp).size(16.dp)
+                        )
+                        LocationText(
+                            lat = destLat,
+                            lng = destLng,
+                            defaultAddress = destination,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onQrClick(shipmentId) },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.QrCode, 
+                            contentDescription = "Show QR", 
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    Surface(
+                        color = Color.White.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = status,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
             
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(28.dp))
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -294,16 +216,139 @@ fun ActiveTripCard(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Column {
-                    Text(text = "ETA", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                    Text(text = eta, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
+                    Text(
+                        text = "ESTIMATED ARRIVAL", 
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = eta, 
+                        color = Color.White, 
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Button(
                     onClick = { onTrackClick(shipmentId) },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                 ) {
-                    Text(text = "View Route", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Track Live", 
+                        color = PrimaryBlue, 
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomItem(icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = if (selected) PrimaryBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.size(26.dp)
+    )
+}
+
+@Composable
+fun AILoadSuggestionCard(shipment: com.truckify.app.models.Shipment, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .width(280.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = PrimaryBlue.copy(alpha = 0.1f), 
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("AI MATCHED", color = PrimaryBlue, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            LocationText(lat = shipment.pickupLat, lng = shipment.pickupLng, defaultAddress = shipment.pickupAddress, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(14.dp).padding(vertical = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            LocationText(lat = shipment.destLat, lng = shipment.destLng, defaultAddress = shipment.destinationAddress, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Payout", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(shipment.price, color = SuccessGreen, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                }
+                Text(
+                    text = shipment.weight, 
+                    color = MaterialTheme.colorScheme.onSurface, 
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MiniEarningsChart() {
+    Canvas(modifier = Modifier.size(60.dp, 30.dp)) {
+        val path = Path().apply {
+            moveTo(0f, size.height)
+            lineTo(size.width * 0.2f, size.height * 0.7f)
+            lineTo(size.width * 0.4f, size.height * 0.85f)
+            lineTo(size.width * 0.6f, size.height * 0.3f)
+            lineTo(size.width * 0.8f, size.height * 0.5f)
+            lineTo(size.width, 0f)
+        }
+        drawPath(
+            path = path, 
+            color = SuccessGreen, 
+            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+        )
+    }
+}
+
+@Composable
+fun NotificationCard(title: String, message: String, time: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                color = PrimaryBlue.copy(alpha = 0.1f), 
+                shape = CircleShape, 
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(Icons.Default.Notifications, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.padding(10.dp))
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, lineHeight = 18.sp)
+                Text(time, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

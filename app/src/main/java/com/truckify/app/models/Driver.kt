@@ -7,6 +7,10 @@ data class Driver(
     val capacity: String = "5 Tons",
     val currentLat: Double = 0.0,
     val currentLng: Double = 0.0,
+    val homeCity: String = "",
+    val homeLat: Double = 0.0,
+    val homeLng: Double = 0.0,
+    val status: String = "Available", // Available, On Trip, Returning
     val isAvailable: Boolean = true,
     val rating: Double = 4.5,
     val totalTrips: Int = 0,
@@ -17,5 +21,11 @@ data class Driver(
     val successfulScans: Int = 0,
     val accidentCount: Int = 0,
     val cancellationsCount: Int = 0,
-    val verificationStatus: String = "Not Started"
+    val verificationStatus: String = "Not Started",
+    
+    // Return Load Analytics
+    val emptyKmSaved: Double = 0.0,
+    val additionalEarnings: Double = 0.0,
+    val returnMatchesCount: Int = 0,
+    val co2Reduced: Double = 0.0
 )

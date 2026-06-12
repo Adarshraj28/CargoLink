@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 fun QRShowScreen(shipmentId: String, onBack: () -> Unit) {
     val context = LocalContext.current
     var shipment by remember { mutableStateOf<Shipment?>(null) }
+    var deliveryOtp by remember { mutableStateOf<String?>(null) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showRating by remember { mutableStateOf(false) }
 
@@ -40,6 +42,10 @@ fun QRShowScreen(shipmentId: String, onBack: () -> Unit) {
             }
             shipment = updatedShipment
             qrBitmap = QRCodeGenerator.generate(updatedShipment.podToken)
+        }
+        
+        FirestoreManager.getShipmentOtp(shipmentId) { otp ->
+            deliveryOtp = otp
         }
     }
 
@@ -90,19 +96,39 @@ fun QRShowScreen(shipmentId: String, onBack: () -> Unit) {
             
             if (isInTransit) {
                 Card(
-                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F7FF)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text(
-                            text = shipment?.deliveryOtp ?: "------",
+                            text = deliveryOtp ?: "------",
                             fontSize = 48.sp,
                             fontWeight = FontWeight.Black,
                             color = LightBlue,
                             letterSpacing = 12.sp
                         )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                        Button(
+                            onClick = {
+                                deliveryOtp?.let {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(it))
+                                    Toast.makeText(context, "OTP Copied to Clipboard!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = LightBlue)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Copy OTP")
+                        }
                     }
                 }
             } else {

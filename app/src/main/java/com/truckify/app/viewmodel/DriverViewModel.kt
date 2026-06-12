@@ -7,11 +7,15 @@ import com.truckify.app.firebase.AuthManager
 import com.truckify.app.firebase.FirestoreManager
 import com.truckify.app.models.Shipment
 import com.truckify.app.models.Transaction
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import javax.inject.Inject
 
-class DriverViewModel : ViewModel() {
+@HiltViewModel
+class DriverViewModel @Inject constructor() : ViewModel() {
 
     private val _availableLoads = MutableStateFlow<List<Shipment>>(emptyList())
     val availableLoads: StateFlow<List<Shipment>> = _availableLoads
@@ -31,6 +35,18 @@ class DriverViewModel : ViewModel() {
     private val _verificationStatus = MutableStateFlow<String?>("Not Started")
     val verificationStatus: StateFlow<String?> = _verificationStatus
 
+    private val _emptyKmSaved = MutableStateFlow(0.0)
+    val emptyKmSaved: StateFlow<Double> = _emptyKmSaved
+
+    private val _additionalEarnings = MutableStateFlow(0.0)
+    val additionalEarnings: StateFlow<Double> = _additionalEarnings
+
+    private val _returnMatchesCount = MutableStateFlow(0)
+    val returnMatchesCount: StateFlow<Int> = _returnMatchesCount
+
+    private val _co2Reduced = MutableStateFlow(0.0)
+    val co2Reduced: StateFlow<Double> = _co2Reduced
+
     private val _todayEarnings = MutableStateFlow(0.0)
     val todayEarnings: StateFlow<Double> = _todayEarnings
 
@@ -46,8 +62,8 @@ class DriverViewModel : ViewModel() {
     private val _incomingLoad = MutableStateFlow<Shipment?>(null)
     val incomingLoad: StateFlow<Shipment?> = _incomingLoad
 
+    private var activeTripListener: ListenerRegistration? = null
     private var loadsListener: ListenerRegistration? = null
-    private var historyListener: ListenerRegistration? = null
     private var txnListener: ListenerRegistration? = null
     private var incomingLoadListener: ListenerRegistration? = null
     private var currentLoadStatusListener: ListenerRegistration? = null
@@ -74,6 +90,14 @@ class DriverViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             
+            // Safety timeout to prevent screen lock/hang
+            launch {
+                delay(3000)
+                if (_isLoading.value) {
+                    _isLoading.value = false
+                }
+            }
+            
             // User Data
             FirestoreManager.getUserData(email) { data ->
                 _userName.value = data?.get("name") as? String ?: "Driver"
@@ -82,28 +106,40 @@ class DriverViewModel : ViewModel() {
                 _verificationStatus.value = data?.get("verificationStatus") as? String ?: "Not Started"
                 _isOnline.value = data?.get("isAvailable") as? Boolean ?: false
                 
+                _emptyKmSaved.value = (data?.get("emptyKmSaved") as? Number)?.toDouble() ?: 0.0
+                _additionalEarnings.value = (data?.get("additionalEarnings") as? Number)?.toDouble() ?: 0.0
+                _returnMatchesCount.value = (data?.get("returnMatchesCount") as? Number)?.toInt() ?: 0
+                _co2Reduced.value = (data?.get("co2Reduced") as? Number)?.toDouble() ?: 0.0
+                
                 if (_isOnline.value) {
                     startListeningForIncomingLoads()
                 }
             }
 
             // Available Loads
-            loadsListener?.remove()
-            loadsListener = FirestoreManager.getAvailableLoads { loads ->
-                _availableLoads.value = loads
-                _isLoading.value = false
+            if (loadsListener == null) {
+                loadsListener = FirestoreManager.getAvailableLoads { loads ->
+                    _availableLoads.value = loads
+                    _isLoading.value = false
+                }
             }
 
-            // Active Trip
-            historyListener?.remove()
-            historyListener = FirestoreManager.getShipmentHistory(email, "Driver") { shipments ->
-                _activeTrip.value = shipments.find { it.status == "In Transit" }
+            // Active Trip - Optimized listener
+            if (activeTripListener == null) {
+                activeTripListener = FirestoreManager.listenToActiveShipments(email, "Driver") { shipments ->
+                    val trip = shipments.firstOrNull()
+                    // Stability check: Only update if the trip data actually changed
+                    if (_activeTrip.value != trip) {
+                        _activeTrip.value = trip
+                    }
+                }
             }
 
             // Earnings
-            txnListener?.remove()
-            txnListener = FirestoreManager.getTransactionHistory(email) { txns ->
-                calculateEarnings(txns)
+            if (txnListener == null) {
+                txnListener = FirestoreManager.getTransactionHistory(email) { txns ->
+                    calculateEarnings(txns)
+                }
             }
         }
     }
@@ -120,9 +156,17 @@ class DriverViewModel : ViewModel() {
         _weekEarnings.value = week
     }
 
-    fun toggleOnlineStatus() {
+    fun toggleOnlineStatus(onError: (String) -> Unit = {}) {
         val email = AuthManager.getCurrentUserEmail() ?: return
-        val newStatus = !_isOnline.value
+        val currentStatus = _isOnline.value
+        val newStatus = !currentStatus
+        
+        // If driver is trying to go offline while on a trip, block it
+        if (currentStatus && !newStatus && _activeTrip.value != null) {
+            onError("Cannot go offline during an active trip. Complete your delivery first.")
+            return
+        }
+
         _isOnline.value = newStatus
         FirestoreManager.updateDriverOnlineStatus(email, newStatus)
         
@@ -187,7 +231,7 @@ class DriverViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         loadsListener?.remove()
-        historyListener?.remove()
+        activeTripListener?.remove()
         txnListener?.remove()
         incomingLoadListener?.remove()
         currentLoadStatusListener?.remove()

@@ -102,10 +102,16 @@ fun PhoneLoginScreen(
                 TruckifyButton(
                     text = "Get OTP",
                     onClick = {
-                        if (phoneNumber.length < 10) {
-                            Toast.makeText(context, "Enter a valid phone number", Toast.LENGTH_SHORT).show()
+                        val formattedNumber = when {
+                            phoneNumber.startsWith("+") -> phoneNumber
+                            phoneNumber.length == 10 -> "+91$phoneNumber"
+                            else -> phoneNumber
+                        }
+                        
+                        if (formattedNumber.length < 12) {
+                            Toast.makeText(context, "Enter a valid 10-digit phone number", Toast.LENGTH_SHORT).show()
                         } else {
-                            authViewModel.sendOtp(phoneNumber, activity)
+                            authViewModel.sendOtp(formattedNumber, activity)
                         }
                     },
                     isLoading = isLoading

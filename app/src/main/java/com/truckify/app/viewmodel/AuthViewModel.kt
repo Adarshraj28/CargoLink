@@ -74,15 +74,18 @@ class AuthViewModel @Inject constructor(
                 if (loggedIn) {
                     val role = repository.getUserRole()
                     android.util.Log.d("Truckify", "userRole: $role")
-                    if (role == null || role == "ProfileMissing" || role == "NoRoleField") {
-                        logout()
-                    } else {
+                    if (role != null && role != "ProfileMissing" && role != "NoRoleField") {
                         _userRole.value = role
                         _isPhoneVerified.value = repository.isPhoneVerified()
                         _isLoggedIn.value = true
                         repository.getCurrentUserEmail()?.let {
                             FirestoreManager.fetchAndSaveFcmToken(it)
                         }
+                    } else if (role == "ProfileMissing" || role == "NoRoleField") {
+                        logout()
+                    } else {
+                        // role is null (likely network), don't logout, stay logged in
+                        _isLoggedIn.value = true
                     }
                 } else {
                     _isLoggedIn.value = false

@@ -9,6 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import java.util.concurrent.TimeUnit
 import android.app.Activity
+import android.content.SharedPreferences
 
 interface AuthRepository {
     suspend fun login(email: String, password: String): Result<Unit>
@@ -32,7 +33,8 @@ interface AuthRepository {
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val auth: FirebaseAuth,
-    private val db: FirebaseFirestore
+    private val db: FirebaseFirestore,
+    private val prefs: SharedPreferences
 ) : AuthRepository {
 
     override suspend fun login(email: String, password: String): Result<Unit> {
@@ -62,6 +64,8 @@ class AuthRepositoryImpl @Inject constructor(
                 "verificationStatus" to if (role == "Vendor") "Verified" else "Not Started"
             )
             db.collection("users").document(cleanEmail).set(user).await()
+            // Cache role locally
+            prefs.edit().putString("user_role", role).apply()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -70,15 +74,24 @@ class AuthRepositoryImpl @Inject constructor(
 
     override fun logout() {
         auth.signOut()
+        prefs.edit().remove("user_role").apply()
     }
 
     override fun isUserLoggedIn(): Boolean = auth.currentUser != null
 
     override suspend fun getUserRole(): String? {
+        // Try to return cached role first for instant login
+        val cachedRole = prefs.getString("user_role", null)
+        if (cachedRole != null) return cachedRole
+
         val email = auth.currentUser?.email?.lowercase()?.trim() ?: return null
         return try {
             val doc = db.collection("users").document(email).get().await()
-            doc.getString("role")
+            val role = doc.getString("role")
+            if (role != null) {
+                prefs.edit().putString("user_role", role).apply()
+            }
+            role
         } catch (e: Exception) {
             null
         }

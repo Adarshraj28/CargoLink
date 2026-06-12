@@ -36,6 +36,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.truckify.app.navigation.Screen
 import com.truckify.app.viewmodel.AuthViewModel
 import androidx.activity.viewModels
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -70,6 +71,26 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
         super.onCreate(savedInstanceState)
         
         android.util.Log.d("Truckify", "MainActivity: onCreate")
+
+        // Listen for real-time notifications from Firestore
+        lifecycleScope.launch(Dispatchers.Main) {
+            authViewModel.isLoggedIn.collect { loggedIn ->
+                if (loggedIn) {
+                    AuthManager.getCurrentUserEmail()?.let { email ->
+                        FirestoreManager.getNotifications(email) { notifications ->
+                            // Show the latest notification if it's new (within last 10 seconds)
+                            val latest = notifications.firstOrNull()
+                            val timestamp = latest?.get("timestamp") as? Long ?: 0
+                            if (System.currentTimeMillis() - timestamp < 10000) {
+                                val title = latest?.get("title") as? String ?: "Truckify"
+                                val message = latest?.get("message") as? String ?: ""
+                                showLocalNotification(title, message)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         val startTime = System.currentTimeMillis()
         splashScreen.setKeepOnScreenCondition { 
@@ -120,6 +141,7 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
             }
             
             com.truckify.app.ui.theme.TruckifyTheme(darkTheme = isDarkTheme) {
+                val context = LocalContext.current
                 Surface(color = MaterialTheme.colorScheme.background) {
                     TruckifyApp(
                         isDarkTheme = isDarkTheme,
@@ -185,6 +207,28 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
         }
     }
 
+    private fun showLocalNotification(title: String, message: String) {
+        val channelId = "truckify_local_notifications"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                channelId, "Truckify Alerts",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val builder = androidx.core.app.NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+    }
+
     fun startStripePayment(amount: Double, clientSecret: String) {
         pendingTopupAmount = amount
         val configuration = PaymentSheet.Configuration(
@@ -225,6 +269,7 @@ fun TruckifyApp(
     authViewModel: AuthViewModel,
     sharedPreferences: SharedPreferences
 ) {
+    val context = LocalContext.current
     val navController = rememberNavController()
     val userRole by authViewModel.userRole.collectAsStateWithLifecycle()
     val isLoading by authViewModel.isLoading.collectAsStateWithLifecycle()
@@ -255,26 +300,30 @@ fun TruckifyApp(
         }
 
         if (isLoggedIn) {
-            if (normalizedRole.isNotEmpty() && 
-                !normalizedRole.contains("Error", ignoreCase = true) && 
-                !normalizedRole.equals("ProfileMissing", ignoreCase = true)) {
-                
-                val isBasicAuthScreen = currentRoute == Screen.Splash.route || 
-                                 currentRoute.startsWith(Screen.Login.route) || 
-                                 currentRoute.startsWith(Screen.Signup.route) || 
-                                 currentRoute == Screen.Onboarding.route || 
-                                 currentRoute == Screen.RoleSelection.route
-                
-                val isVerifiedOnPhoneScreen = currentRoute == Screen.PhoneLogin.route && isPhoneVerified
+            if (normalizedRole.isNotEmpty()) {
+                if (!normalizedRole.contains("Error", ignoreCase = true) && 
+                    !normalizedRole.equals("ProfileMissing", ignoreCase = true)) {
+                    
+                    val isBasicAuthScreen = currentRoute == Screen.Splash.route || 
+                                     currentRoute.startsWith(Screen.Login.route) || 
+                                     currentRoute.startsWith(Screen.Signup.route) || 
+                                     currentRoute == Screen.Onboarding.route || 
+                                     currentRoute == Screen.RoleSelection.route
+                    
+                    val isVerifiedOnPhoneScreen = currentRoute == Screen.PhoneLogin.route && isPhoneVerified
 
-                if (isBasicAuthScreen || isVerifiedOnPhoneScreen) {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(0) { inclusive = true }
+                    if (isBasicAuthScreen || isVerifiedOnPhoneScreen) {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
+                } else {
+                    // Logged in but explicitly invalid role found
+                    authViewModel.logout()
                 }
             } else {
-                // Logged in but no valid role found
-                authViewModel.logout()
+                // Logged in but role is still null/empty (still loading or network error)
+                // Do NOT logout here, just wait or show loading
             }
         } else {
             // Not logged in
@@ -348,13 +397,7 @@ fun TruckifyApp(
         composable(Screen.Home.route) {
             if (userRole?.equals("Vendor", ignoreCase = true) == true) {
                 HomeDashboard(
-                    onCreateClick = { 
-                        if (isPhoneVerified) {
-                            navController.navigate(Screen.Create.route)
-                        } else {
-                            navController.navigate(Screen.PhoneLogin.route)
-                        }
-                    },
+                    onCreateClick = { navController.navigate(Screen.Create.route) },
                     onNotificationClick = { navController.navigate(Screen.Notifications.route) },
                     onSettingsClick = { navController.navigate(Screen.Settings.route) },
                     onSearchClick = { navController.navigate(Screen.Search.route) },
@@ -376,7 +419,8 @@ fun TruckifyApp(
                         selectedShipmentId = id
                         navController.navigate(Screen.QrShow.route)
                     },
-                    onDriversClick = { navController.navigate(Screen.Drivers.route) }
+                    onDriversClick = { navController.navigate(Screen.Drivers.route) },
+                    viewModel = hiltViewModel()
                 )
             } else {
                 DriverDashboard(
@@ -389,23 +433,22 @@ fun TruckifyApp(
                     onChatbotClick = { navController.navigate(Screen.Chatbot.route) },
                     onTrackClick = { id ->
                         selectedShipmentId = id
-                        // If shipment is still available, show the confirming screen
-                        // This logic should probably be inside a ViewModel or checked here
-                        // For now, I'll navigate to Tracking and let Tracking decide or handle it in Home
                         navController.navigate(Screen.Tracking.route)
                     },
                     onVerifyClick = { navController.navigate(Screen.Verification.route) },
                     onQrClick = { id, status ->
                         selectedShipmentId = id
                         if (status == "In Transit") navController.navigate(Screen.OtpVerify.route)
-                        else navController.navigate(Screen.QrScan.route)
+                        else navController.navigate(Screen.QrShow.route)
                     },
                     onLoadClick = { id ->
                         selectedShipmentId = id
                         navController.navigate(Screen.LoadDetails.route)
                     },
                     onProfileClick = { navController.navigate(Screen.Profile.route) },
-                    onExpenseClick = { navController.navigate(Screen.ExpenseTracker.route) }
+                    onExpenseClick = { navController.navigate(Screen.ExpenseTracker.route) },
+                    viewModel = hiltViewModel(),
+                    returnViewModel = hiltViewModel()
                 )
             }
         }

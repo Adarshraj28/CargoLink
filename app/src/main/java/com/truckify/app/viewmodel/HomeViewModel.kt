@@ -6,11 +6,14 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.truckify.app.firebase.AuthManager
 import com.truckify.app.firebase.FirestoreManager
 import com.truckify.app.models.Shipment
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class HomeViewModel : ViewModel() {
+@HiltViewModel
+class HomeViewModel @Inject constructor() : ViewModel() {
 
     private val _activeShipments = MutableStateFlow<List<Shipment>>(emptyList())
     val activeShipments: StateFlow<List<Shipment>> = _activeShipments

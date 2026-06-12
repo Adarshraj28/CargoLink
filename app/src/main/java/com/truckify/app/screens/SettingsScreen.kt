@@ -108,6 +108,55 @@ fun SettingsScreen(
 
             item {
                 Spacer(modifier = Modifier.height(24.dp))
+                
+                // --- Fresh Start Admin Feature ---
+                val context = LocalContext.current
+                var showResetDialog by remember { mutableStateOf(false) }
+                
+                if (showResetDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showResetDialog = false },
+                        title = { Text("Fresh Start (Admin)") },
+                        text = { Text("This will delete ALL shipments, transactions, and reset stats for ALL IDs. This action is permanent. Continue?") },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    FirestoreManager.wipeAllData {
+                                        Toast.makeText(context, "System Fresh Start Complete!", Toast.LENGTH_LONG).show()
+                                        onLogout()
+                                    }
+                                    showResetDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) {
+                                Text("YES, RESET EVERYTHING")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showResetDialog = false }) {
+                                Text("CANCEL")
+                            }
+                        }
+                    )
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { showResetDialog = true },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFFE65100))
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(text = "Fresh Start (Reset All IDs)", color = Color(0xFFE65100), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
                 LogoutButton(onLogout)
                 Spacer(modifier = Modifier.height(40.dp))
             }

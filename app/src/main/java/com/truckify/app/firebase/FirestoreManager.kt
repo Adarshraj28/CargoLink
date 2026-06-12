@@ -8,6 +8,7 @@ import com.truckify.app.models.Driver
 import com.truckify.app.models.Transaction
 import com.truckify.app.models.ChatMessage
 import com.truckify.app.models.Expense
+import com.truckify.app.models.Review
 
 object FirestoreManager {
 
@@ -34,39 +35,47 @@ object FirestoreManager {
 
     fun postShipment(shipment: Shipment, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
         val docRef = db.collection("shipments").document()
+        val otpDocRef = db.collection("shipmentOtps").document(docRef.id)
+        
+        val otp = (100000..999999).random().toString()
         val finalShipment = shipment.copy(
             id = docRef.id,
             podToken = java.util.UUID.randomUUID().toString(),
-            deliveryOtp = (100000..999999).random().toString(),
             otpTimestamp = System.currentTimeMillis()
         )
-        docRef.set(finalShipment)
-            .addOnSuccessListener {
-                // Background notification for drivers
-                db.collection("users").whereEqualTo("role", "Driver").get().addOnSuccessListener { drivers ->
-                    db.runBatch { batch ->
-                        for (driver in drivers) {
-                            val email = driver.getString("email") ?: continue
-                            val notification = hashMapOf(
-                                "recipientEmail" to email,
-                                "title" to "New Load Available",
-                                "message" to "A new shipment is available from ${shipment.pickupAddress.split(",").first()}",
-                                "timestamp" to System.currentTimeMillis()
-                            )
-                            batch.set(db.collection("notifications").document(), notification)
-                        }
+        
+        db.runBatch { batch ->
+            batch.set(docRef, finalShipment)
+            batch.set(otpDocRef, hashMapOf(
+                "shipmentId" to docRef.id,
+                "vendorEmail" to shipment.vendorEmail,
+                "otp" to otp
+            ))
+        }.addOnSuccessListener {
+            // Background notification for drivers
+            db.collection("users").whereEqualTo("role", "Driver").get().addOnSuccessListener { drivers ->
+                db.runBatch { batch ->
+                    for (driver in drivers) {
+                        val email = driver.getString("email") ?: continue
+                        val notification = hashMapOf(
+                            "recipientEmail" to email,
+                            "title" to "New Load Available",
+                            "message" to "A new shipment is available from ${shipment.pickupAddress.split(",").first()}",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                        batch.set(db.collection("notifications").document(), notification)
                     }
                 }
-                onSuccess(docRef.id)
-                
-                // Notify Vendor with OTP
-                sendInternalNotification(
-                    shipment.vendorEmail,
-                    "Shipment Posted",
-                    "Your shipment #${docRef.id.takeLast(4).uppercase()} has been posted. Delivery OTP: ${finalShipment.deliveryOtp}"
-                )
             }
-            .addOnFailureListener { onError(it.message ?: "Failed to post") }
+            onSuccess(docRef.id)
+            
+            // Notify Vendor with OTP
+            sendInternalNotification(
+                shipment.vendorEmail,
+                "Shipment Posted",
+                "Your shipment #${docRef.id.takeLast(4).uppercase()} has been posted. Delivery OTP: $otp"
+            )
+        }.addOnFailureListener { onError(it.message ?: "Failed to post") }
     }
 
     fun getAvailableLoads(onResult: (List<Shipment>) -> Unit): ListenerRegistration {
@@ -90,10 +99,8 @@ object FirestoreManager {
     }
 
     fun getActiveShipments(email: String, onResult: (List<Shipment>) -> Unit): ListenerRegistration {
-        // Use a more generous time window or just rely on status for active shipments
-        // For a production app, you'd want to index these queries
         return db.collection("shipments")
-            .whereIn("status", listOf("In Transit", "Available"))
+            .whereIn("status", listOf("Accepted", "Arrived", "In Transit"))
             .addSnapshotListener { value, error ->
                 if (error != null) {
                     android.util.Log.e("FirestoreManager", "getActiveShipments Error: ${error.message}")
@@ -105,6 +112,26 @@ object FirestoreManager {
                         doc.toObject(Shipment::class.java)?.copy(id = doc.id)
                     }.filter { 
                         it.vendorEmail == email || it.driverEmail == email
+                    }.sortedByDescending { it.timestamp }
+                    onResult(shipments)
+                }
+            }
+    }
+
+    fun listenToActiveShipments(email: String, role: String, onResult: (List<Shipment>) -> Unit): ListenerRegistration {
+        val field = if (role == "Vendor") "vendorEmail" else "driverEmail"
+        return db.collection("shipments")
+            .whereEqualTo(field, email)
+            .whereIn("status", listOf("Accepted", "Arrived", "In Transit"))
+            .addSnapshotListener { value, error ->
+                if (error != null) {
+                    android.util.Log.e("FirestoreManager", "listenToActiveShipments Error: ${error.message}")
+                    onResult(emptyList())
+                    return@addSnapshotListener
+                }
+                if (value != null) {
+                    val shipments = value.documents.mapNotNull { doc ->
+                        doc.toObject(Shipment::class.java)?.copy(id = doc.id)
                     }.sortedByDescending { it.timestamp }
                     onResult(shipments)
                 }
@@ -155,19 +182,24 @@ object FirestoreManager {
             onError("Invalid Load ID")
             return
         }
+
         db.collection("users").document(driverEmail).get().addOnSuccessListener { userDoc ->
-            val vStatus = userDoc.getString("verificationStatus") ?: "Not Started"
-            if (vStatus != "Verified") {
+            if (!userDoc.exists()) {
+                onError("Driver profile not found. Please complete your profile.")
+                return@addOnSuccessListener
+            }
+            val driver = userDoc.toObject(Driver::class.java) ?: return@addOnSuccessListener onError("Failed to parse driver profile")
+            
+            if (driver.verificationStatus != "Verified") {
                 onError("Please verify your account to accept loads.")
                 return@addOnSuccessListener
             }
 
-            val driverCapacityStr = userDoc.getString("capacity") ?: "0 Tons"
-            val driverCapacity = driverCapacityStr.split(" ").firstOrNull()?.toDoubleOrNull() ?: 0.0
+            val driverCapacity = driver.capacity.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: 0.0
 
             // Check for existing active shipments first
             db.collection("shipments").whereEqualTo("driverEmail", driverEmail)
-                .whereEqualTo("status", "In Transit").get().addOnSuccessListener { activeTrips ->
+                .whereIn("status", listOf("In Transit", "Accepted")).get().addOnSuccessListener { activeTrips ->
                     if (!activeTrips.isEmpty) {
                         onError("You already have an active shipment. Complete it first.")
                         return@addOnSuccessListener
@@ -182,73 +214,55 @@ object FirestoreManager {
                             return@addOnSuccessListener
                         }
 
-                        val shipmentWeight = shipment.weight.split(" ").firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val shipmentWeight = shipment.weight.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: 0.0
                         if (shipmentWeight > driverCapacity) {
-                            onError("This load exceeds your truck's capacity ($driverCapacityStr).")
+                            onError("This load exceeds your truck's capacity (${driver.capacity}).")
                             return@addOnSuccessListener
                         }
 
-                        val vendorEmail = shipment.vendorEmail
-                        val cleanPrice = shipment.price.replace("₹", "").replace(",", "").toDoubleOrNull() ?: 0.0
-
                         db.runTransaction { transaction ->
                             val shipmentRef = db.collection("shipments").document(shipmentId)
+                            // READ: Shipment details
                             val currentShipment = transaction.get(shipmentRef).toObject(Shipment::class.java)
+                                ?: throw Exception("Shipment not found")
                             
-                            if (currentShipment?.status != "Available") {
+                            if (currentShipment.status != "Available") {
                                 throw Exception("Shipment already taken")
                             }
 
+                            // --- START WRITES ---
                             transaction.update(shipmentRef, mapOf(
-                                "status" to "In Transit",
+                                "status" to "Accepted",
                                 "driverEmail" to driverEmail
                             ))
 
-                            if (shipment.paymentMode != "COD" && cleanPrice > 0) {
-                                val vendorWalletRef = db.collection("wallets").document(vendorEmail)
-                                val vendorWalletDoc = transaction.get(vendorWalletRef)
-                                val currentBalance = vendorWalletDoc.getDouble("balance") ?: 0.0
-                                
-                                if (currentBalance >= cleanPrice) {
-                                    transaction.update(vendorWalletRef, "balance", currentBalance - cleanPrice)
-                                    
-                                    val txnId = db.collection("transactions").document().id
-                                    val escrowTxn = mapOf(
-                                        "id" to txnId,
-                                        "userEmail" to vendorEmail,
-                                        "shipmentId" to shipmentId,
-                                        "amount" to cleanPrice,
-                                        "type" to "Escrow Payment",
-                                        "status" to "Escrow",
-                                        "timestamp" to System.currentTimeMillis()
-                                    )
-                                    transaction.set(db.collection("transactions").document(txnId), escrowTxn)
-                                    transaction.update(shipmentRef, "paymentStatus", "Escrowed")
-                                } else {
-                                    throw Exception("Insufficient Vendor Balance")
-                                }
+                            // If it's an Escrow payment, we just mark it as such without strictly deducting from a wallet balance
+                            if (currentShipment.paymentMode != "COD") {
+                                transaction.update(shipmentRef, "paymentStatus", "Escrowed")
                             }
                         }.addOnSuccessListener {
-                            sendInternalNotification(vendorEmail, "Load Accepted", "Driver $driverEmail has accepted your shipment #$shipmentId.")
+                            sendInternalNotification(shipment.vendorEmail, "Load Accepted", "Driver ${driver.name.ifBlank { driverEmail }} has accepted your shipment #$shipmentId.")
+                            sendInternalNotification(shipment.vendorEmail, "Load Accepted", "Driver ${driver.name.ifBlank { driverEmail }} has accepted your shipment #$shipmentId.")
                             
-                            // Also notify Driver with the details and OTP for completion
-                            db.collection("shipments").document(shipmentId).get().addOnSuccessListener { sDoc ->
-                                val s = sDoc.toObject(Shipment::class.java)
-                                if (s != null) {
-                                    sendInternalNotification(
-                                        driverEmail,
-                                        "Load Accepted",
-                                        "You've accepted the load to ${s.destinationAddress.split(",").first()}. Delivery OTP: ${s.deliveryOtp}"
-                                    )
-                                }
-                            }
+                            sendInternalNotification(
+                                driverEmail,
+                                "Load Accepted",
+                                "You've accepted the load to ${shipment.destinationAddress.split(",").first()}."
+                            )
 
                             onSuccess()
-                        }.addOnFailureListener { onError(it.message ?: "Failed to accept") }
+                        }.addOnFailureListener { 
+                            android.util.Log.e("FirestoreManager", "Transaction Error: ${it.message}")
+                            onError(it.message ?: "Failed to accept") 
+                        }
                     }.addOnFailureListener { onError(it.message ?: "Could not fetch shipment details") }
-                }.addOnFailureListener { onError(it.message ?: "Could not verify active trips") }
+                }.addOnFailureListener { 
+                    android.util.Log.e("FirestoreManager", "Active Trip Check Error: ${it.message}")
+                    onError(it.message ?: "Could not verify active trips") 
+                }
         }.addOnFailureListener { onError(it.message ?: "Connection error") }
     }
+
 
     fun cancelShipmentByDriver(shipmentId: String, driverEmail: String, onSuccess: () -> Unit) {
         db.collection("shipments").document(shipmentId).update(mapOf(
@@ -269,6 +283,35 @@ object FirestoreManager {
         // Now handled by verifyPodWithToken
     }
 
+    fun completeShipmentDirectly(shipmentId: String, onSuccess: () -> Unit) {
+        if (shipmentId.isBlank()) return
+        db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
+            val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener
+            
+            db.collection("shipments").document(shipmentId)
+                .update(mapOf(
+                    "status" to "Delivered",
+                    "deliveryTime" to System.currentTimeMillis()
+                ))
+                .addOnSuccessListener {
+                    sendInternalNotification(shipment.vendorEmail, "Shipment Delivered", "Your shipment #${shipment.id.takeLast(4)} has been delivered.")
+                    if (shipment.paymentMode != "COD") {
+                        releaseEscrow(shipmentId)
+                    }
+                    updateDriverStats(shipment.driverEmail, isOnTime = true, isSuccessfulScan = true)
+                    onSuccess()
+                }
+        }
+    }
+
+    fun markArrivedAtPickup(shipmentId: String, vendorEmail: String, onSuccess: () -> Unit) {
+        db.collection("shipments").document(shipmentId).update("status", "Arrived")
+            .addOnSuccessListener {
+                sendInternalNotification(vendorEmail, "Driver Arrived", "Your driver has arrived at the pickup location for shipment #$shipmentId")
+                onSuccess()
+            }
+    }
+
     fun verifyPickupQR(shipmentId: String, token: String, lat: Double, lng: Double, onSuccess: () -> Unit, onError: (String) -> Unit) {
         if (shipmentId.isBlank()) {
             onError("Invalid shipment ID")
@@ -278,50 +321,60 @@ object FirestoreManager {
             val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener
             if (shipment.podToken == token) {
                 val otp = (100000..999999).random().toString()
-                db.collection("shipments").document(shipmentId)
-                    .update(mapOf(
+                
+                db.runBatch { batch ->
+                    batch.update(db.collection("shipments").document(shipmentId), mapOf(
                         "status" to "In Transit",
-                        "deliveryOtp" to otp,
                         "pickupTime" to System.currentTimeMillis(),
                         "pickupActualLat" to lat,
-                        "pickupActualLng" to lng
+                        "pickupActualLng" to lng,
+                        "otpTimestamp" to System.currentTimeMillis()
                     ))
-                    .addOnSuccessListener {
-                        sendInternalNotification(shipment.vendorEmail, "Load Picked Up", "Shipment #${shipment.id.takeLast(4)} is now In Transit. Delivery OTP: $otp")
-                        onSuccess()
-                    }
+                    batch.set(db.collection("shipmentOtps").document(shipmentId), hashMapOf(
+                        "shipmentId" to shipmentId,
+                        "vendorEmail" to shipment.vendorEmail,
+                        "otp" to otp
+                    ))
+                }.addOnSuccessListener {
+                    sendInternalNotification(shipment.vendorEmail, "Load Picked Up", "Shipment #${shipment.id.takeLast(4)} is now In Transit. Delivery OTP: $otp")
+                    onSuccess()
+                }
             } else {
                 onError("Invalid QR Code")
             }
         }
     }
 
-    fun verifyDeliveryOtp(shipmentId: String, otp: String, lat: Double, lng: Double, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun verifyDeliveryOtp(shipmentId: String, enteredOtp: String, lat: Double, lng: Double, onSuccess: () -> Unit, onError: (String) -> Unit) {
         if (shipmentId.isBlank()) {
             onError("Invalid shipment ID")
             return
         }
-        db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
-            val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener
+        
+        db.collection("shipmentOtps").document(shipmentId).get().addOnSuccessListener { otpDoc ->
+            val storedOtp = otpDoc.getString("otp") ?: ""
             
-            // Check if OTP is expired (e.g., 10 minutes)
-            val isExpired = System.currentTimeMillis() - shipment.otpTimestamp > 10 * 60 * 1000
-            if (isExpired) {
-                onError("OTP has expired. Please ask the sender to resend.")
-                return@addOnSuccessListener
-            }
+            db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
+                val shipment = doc.toObject(Shipment::class.java) ?: return@addOnSuccessListener
+                
+                val isExpired = System.currentTimeMillis() - shipment.otpTimestamp > 30 * 60 * 1000
+                if (isExpired) {
+                    onError("OTP has expired. Please ask the sender to refresh the code.")
+                    return@addOnSuccessListener
+                }
 
-            if (shipment.deliveryOtp == otp) {
-                db.collection("shipments").document(shipmentId)
-                    .update(mapOf(
-                        "status" to "Delivered",
-                        "deliveryTime" to System.currentTimeMillis(),
-                        "deliveryActualLat" to lat,
-                        "deliveryActualLng" to lng
-                    ))
-                    .addOnSuccessListener {
-                        sendInternalNotification(shipment.vendorEmail, "Shipment Delivered", "Your shipment #${shipment.id.takeLast(4)} has been delivered successfully.")
-                        sendInternalNotification(shipment.driverEmail, "Payment Received", "POD Verified! Payment for shipment #${shipment.id.takeLast(4)} has been added to your wallet.")
+                if (storedOtp == enteredOtp && shipment.status == "In Transit") {
+                    db.runBatch { batch ->
+                        batch.update(db.collection("shipments").document(shipmentId), mapOf(
+                            "status" to "Delivered",
+                            "deliveryTime" to System.currentTimeMillis(),
+                            "deliveryActualLat" to lat,
+                            "deliveryActualLng" to lng
+                        ))
+                        batch.delete(db.collection("shipmentOtps").document(shipmentId))
+                    }.addOnSuccessListener {
+                        sendInternalNotification(shipment.vendorEmail, "Shipment Delivered", "Your shipment #${shipment.id.takeLast(4)} has been delivered successfully via OTP.")
+                        sendInternalNotification(shipment.driverEmail, "Earnings Released", "Delivery Verified! Payment for shipment #${shipment.id.takeLast(4)} has been added to your wallet.")
                         
                         if (shipment.paymentMode == "COD") {
                             val cleanPrice = shipment.price.replace("₹", "").replace(",", "").toDoubleOrNull() ?: 0.0
@@ -332,10 +385,13 @@ object FirestoreManager {
                         updateDriverStats(shipment.driverEmail, isOnTime = true, isSuccessfulScan = true)
                         onSuccess()
                     }
-            } else {
-                onError("Invalid OTP")
+                } else if (shipment.status == "Delivered") {
+                    onError("Shipment already delivered")
+                } else {
+                    onError("Invalid OTP")
+                }
             }
-        }
+        }.addOnFailureListener { onError("Failed to verify OTP") }
     }
 
     private fun updateDriverStats(email: String, isOnTime: Boolean = false, isSuccessfulScan: Boolean = false, accident: Boolean = false, cancellation: Boolean = false) {
@@ -369,6 +425,51 @@ object FirestoreManager {
         }
     }
 
+    fun wipeAllData(onSuccess: () -> Unit) {
+        val collections = listOf("shipments", "transactions", "notifications", "expenses", "shipmentOtps", "platform_earnings")
+        
+        collections.forEach { coll ->
+            db.collection(coll).get().addOnSuccessListener { docs ->
+                db.runBatch { batch ->
+                    for (doc in docs) {
+                        batch.delete(db.collection(coll).document(doc.id))
+                    }
+                }
+            }
+        }
+        
+        db.collection("users").get().addOnSuccessListener { docs ->
+            db.runBatch { batch ->
+                for (doc in docs) {
+                    val updates = mapOf(
+                        "totalTrips" to 0,
+                        "onTimeDeliveries" to 0,
+                        "successfulScans" to 0,
+                        "accidentCount" to 0,
+                        "cancellationsCount" to 0,
+                        "trustScore" to 90.0,
+                        "rating" to 4.5,
+                        "emptyKmSaved" to 0.0,
+                        "additionalEarnings" to 0.0,
+                        "returnMatchesCount" to 0,
+                        "co2Reduced" to 0.0,
+                        "status" to "Available",
+                        "isAvailable" to true
+                    )
+                    batch.update(db.collection("users").document(doc.id), updates)
+                }
+            }
+        }
+        
+        db.collection("wallets").get().addOnSuccessListener { docs ->
+            db.runBatch { batch ->
+                for (doc in docs) {
+                    batch.update(db.collection("wallets").document(doc.id), "balance", 0.0)
+                }
+            }.addOnSuccessListener { onSuccess() }
+        }
+    }
+
     private fun sendInternalNotification(recipientEmail: String, title: String, message: String) {
         val notification = hashMapOf(
             "recipientEmail" to recipientEmail,
@@ -382,12 +483,30 @@ object FirestoreManager {
     fun resendDeliveryOtp(shipmentId: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
         val newOtp = (100000..999999).random().toString()
         val timestamp = System.currentTimeMillis()
-        db.collection("shipments").document(shipmentId).update(mapOf(
-            "deliveryOtp" to newOtp,
-            "otpTimestamp" to timestamp
-        )).addOnSuccessListener {
-            onSuccess(newOtp)
-        }.addOnFailureListener { onError(it.message ?: "Failed to resend") }
+        db.collection("shipments").document(shipmentId).get().addOnSuccessListener { doc ->
+            val shipment = doc.toObject(Shipment::class.java)
+            
+            db.runBatch { batch ->
+                batch.update(db.collection("shipments").document(shipmentId), "otpTimestamp", timestamp)
+                batch.update(db.collection("shipmentOtps").document(shipmentId), "otp", newOtp)
+            }.addOnSuccessListener {
+                if (shipment != null) {
+                    sendInternalNotification(
+                        shipment.vendorEmail,
+                        "New Delivery OTP",
+                        "The OTP for shipment #${shipment.id.takeLast(4)} has been refreshed: $newOtp"
+                    )
+                }
+                onSuccess(newOtp)
+            }.addOnFailureListener { onError(it.message ?: "Failed to resend") }
+        }
+    }
+
+    fun getShipmentOtp(shipmentId: String, onResult: (String?) -> Unit): ListenerRegistration? {
+        if (shipmentId.isBlank()) return null
+        return db.collection("shipmentOtps").document(shipmentId).addSnapshotListener { value, _ ->
+            onResult(value?.getString("otp"))
+        }
     }
 
     fun getUserData(email: String, onResult: (Map<String, Any>?) -> Unit) {
@@ -397,15 +516,50 @@ object FirestoreManager {
             .addOnFailureListener { onResult(null) }
     }
 
-    fun submitDriverRating(driverEmail: String, rating: Double) {
-        db.collection("users").document(driverEmail).get().addOnSuccessListener { doc ->
-            val driver = doc.toObject(Driver::class.java) ?: return@addOnSuccessListener
-            val currentRating = driver.rating
-            val totalTrips = driver.totalTrips
-            val newRating = ((currentRating * totalTrips) + rating) / (totalTrips + 1)
+    fun submitDriverReview(review: Review, onSuccess: () -> Unit) {
+        val reviewId = db.collection("reviews").document().id
+        val finalReview = review.copy(id = reviewId)
+        
+        db.runBatch { batch ->
+            batch.set(db.collection("reviews").document(reviewId), finalReview)
+            batch.update(db.collection("shipments").document(review.shipmentId), "vendorRatedDriver", true)
+        }.addOnSuccessListener {
+            // Update driver average rating
+            updateUserAverageRating(review.targetEmail, review.rating)
+            onSuccess()
+        }
+    }
+
+    fun submitVendorReview(review: Review, onSuccess: () -> Unit) {
+        val reviewId = db.collection("reviews").document().id
+        val finalReview = review.copy(id = reviewId)
+        
+        db.runBatch { batch ->
+            batch.set(db.collection("reviews").document(reviewId), finalReview)
+            batch.update(db.collection("shipments").document(review.shipmentId), "driverRatedVendor", true)
+        }.addOnSuccessListener {
+            // Update vendor average rating
+            updateUserAverageRating(review.targetEmail, review.rating)
+            onSuccess()
+        }
+    }
+
+    private fun updateUserAverageRating(email: String, newRating: Double) {
+        db.collection("users").document(email).get().addOnSuccessListener { doc ->
+            if (!doc.exists()) return@addOnSuccessListener
             
-            db.collection("users").document(driverEmail).update("rating", newRating).addOnSuccessListener {
-                updateDriverStats(driverEmail) // Triggers trust score recalculation with new rating
+            val currentRating = doc.getDouble("rating") ?: 4.5
+            val totalTrips = doc.getLong("totalTrips")?.toInt() ?: 0
+            
+            // weighted average
+            val updatedRating = ((currentRating * totalTrips) + newRating) / (totalTrips + 1)
+            
+            db.collection("users").document(email).update(mapOf(
+                "rating" to updatedRating
+            )).addOnSuccessListener {
+                if (doc.getString("role") == "Driver") {
+                    updateDriverStats(email)
+                }
             }
         }
     }
@@ -712,8 +866,27 @@ object FirestoreManager {
             }
     }
 
-    fun markArrived(shipmentId: String, vendorEmail: String) {
-        sendInternalNotification(vendorEmail, "Shipment Arrived", "Your driver has arrived at the destination for shipment #$shipmentId")
+    fun markArrivedAtDestination(shipmentId: String, vendorEmail: String, onSuccess: () -> Unit) {
+        db.collection("shipments").document(shipmentId).update("status", "Arrived at Destination")
+            .addOnSuccessListener {
+                sendInternalNotification(vendorEmail, "Driver Arrived", "Your driver has arrived at the destination for shipment #$shipmentId")
+                onSuccess()
+            }
+    }
+
+    fun sendSOSAlert(shipmentId: String, driverEmail: String) {
+        val alertId = db.collection("sos_alerts").document().id
+        val alert = hashMapOf(
+            "id" to alertId,
+            "shipmentId" to shipmentId,
+            "driverEmail" to driverEmail,
+            "timestamp" to System.currentTimeMillis(),
+            "status" to "Active"
+        )
+        db.collection("sos_alerts").document(alertId).set(alert)
+        
+        // Notify Team
+        sendInternalNotification("support@truckify.app", "SOS ALERT", "Emergency alert from driver $driverEmail for shipment $shipmentId")
     }
 
     fun listenToShipment(shipmentId: String, onUpdate: (Shipment) -> Unit): ListenerRegistration? {

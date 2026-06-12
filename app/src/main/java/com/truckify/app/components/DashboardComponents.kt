@@ -7,7 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -128,10 +133,13 @@ fun ActiveTripCard(
     destLat: Double = 0.0,
     destLng: Double = 0.0,
     eta: String = "2h 15m",
-    status: String = "In Transit",
+    status: String = "Accepted", // Accepted, Arrived, In Transit
+    vendorEmail: String = "",
     onTrackClick: (String) -> Unit,
     onQrClick: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -162,7 +170,7 @@ fun ActiveTripCard(
                             fontSize = 18.sp
                         )
                         Icon(
-                            Icons.Default.ArrowForward, 
+                            Icons.AutoMirrored.Filled.ArrowForward, 
                             contentDescription = null, 
                             tint = Color.White.copy(alpha = 0.6f), 
                             modifier = Modifier.padding(horizontal = 8.dp).size(16.dp)
@@ -180,29 +188,39 @@ fun ActiveTripCard(
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { onQrClick(shipmentId) },
-                        modifier = Modifier.size(36.dp)
+                        onClick = {
+                            val targetLat = if (status == "Accepted" || status == "Arrived") pickupLat else destLat
+                            val targetLng = if (status == "Accepted" || status == "Arrived") pickupLng else destLng
+                            val gmmIntentUri = Uri.parse("google.navigation:q=$targetLat,$targetLng")
+                            val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                            mapIntent.setPackage("com.google.android.apps.maps")
+                            try {
+                                context.startActivity(mapIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Maps not found", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.2f), CircleShape)
                     ) {
                         Icon(
-                            Icons.Default.QrCode, 
-                            contentDescription = "Show QR", 
+                            Icons.Default.Navigation, 
+                            contentDescription = "Navigate", 
                             tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     
                     Spacer(modifier = Modifier.width(8.dp))
                     
-                    Surface(
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(10.dp)
+                    IconButton(
+                        onClick = { onQrClick(shipmentId) },
+                        modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.2f), CircleShape)
                     ) {
-                        Text(
-                            text = status,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                        Icon(
+                            Icons.Default.QrCode, 
+                            contentDescription = "Show QR", 
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -213,11 +231,11 @@ fun ActiveTripCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
                     Text(
-                        text = "ESTIMATED ARRIVAL", 
+                        text = if (status == "Accepted") "ON THE WAY TO PICKUP" else if (status == "Arrived") "READY FOR PICKUP" else "IN TRANSIT", 
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.7f),
                         letterSpacing = 1.sp
@@ -229,18 +247,51 @@ fun ActiveTripCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Button(
-                    onClick = { onTrackClick(shipmentId) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        text = "Track Live", 
-                        color = PrimaryBlue, 
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onTrackClick(shipmentId) },
+                        modifier = Modifier.size(44.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(Icons.Default.Map, contentDescription = "Track", tint = Color.White)
+                    }
+                    
+                    when (status) {
+                        "Accepted" -> {
+                            Button(
+                                onClick = {
+                                    com.truckify.app.firebase.FirestoreManager.markArrivedAtPickup(shipmentId, vendorEmail) {
+                                        Toast.makeText(context, "Marked as Arrived!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                            ) {
+                                Text("I've Arrived", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        "Arrived" -> {
+                            Button(
+                                onClick = { onQrClick(shipmentId) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                            ) {
+                                Text("Verify OTP", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        else -> {
+                            Button(
+                                onClick = { onTrackClick(shipmentId) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(14.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                            ) {
+                                Text("Current Order", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -258,11 +309,14 @@ fun BottomItem(icon: androidx.compose.ui.graphics.vector.ImageVector, selected: 
 }
 
 @Composable
-fun AILoadSuggestionCard(shipment: com.truckify.app.models.Shipment, onClick: () -> Unit) {
+fun AILoadSuggestionCard(
+    shipment: com.truckify.app.models.Shipment, 
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
     Card(
         modifier = Modifier
-            .width(280.dp)
-            .clickable { onClick() },
+            .width(280.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
@@ -283,27 +337,35 @@ fun AILoadSuggestionCard(shipment: com.truckify.app.models.Shipment, onClick: ()
                         Text("AI MATCHED", color = PrimaryBlue, fontWeight = FontWeight.Bold, fontSize = 9.sp)
                     }
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(shipment.price, color = SuccessGreen, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
             }
             Spacer(modifier = Modifier.height(16.dp))
             LocationText(lat = shipment.pickupLat, lng = shipment.pickupLng, defaultAddress = shipment.pickupAddress, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(14.dp).padding(vertical = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             LocationText(lat = shipment.destLat, lng = shipment.destLng, defaultAddress = shipment.destinationAddress, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Payout", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(shipment.price, color = SuccessGreen, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = onDecline,
+                    modifier = Modifier.weight(1f).height(40.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
+                ) {
+                    Text("Skip", color = Color.Gray, fontSize = 12.sp)
                 }
-                Text(
-                    text = shipment.weight, 
-                    color = MaterialTheme.colorScheme.onSurface, 
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium
-                )
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.weight(1.5f).height(40.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Accept", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
             }
         }
     }

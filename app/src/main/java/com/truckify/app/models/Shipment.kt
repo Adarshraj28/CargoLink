@@ -22,7 +22,6 @@ data class Shipment(
     val currentLng: Double = 0.0,
     val aiRecommendationScore: Double = 0.0,
     val podToken: String = "",
-    val deliveryOtp: String = "",
     val otpTimestamp: Long = 0,
     val paymentMode: String = "Escrow", // Escrow, COD
     val paymentStatus: String = "Pending", // Pending, Escrowed, Success, Refunded
@@ -36,5 +35,9 @@ data class Shipment(
     val deliveryActualLat: Double = 0.0,
     val deliveryActualLng: Double = 0.0,
     val commission: Double = 0.0,
-    val driverPayout: Double = 0.0
+    val driverPayout: Double = 0.0,
+    
+    // Rating Flags
+    val vendorRatedDriver: Boolean = false,
+    val driverRatedVendor: Boolean = false
 )

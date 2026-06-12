@@ -92,12 +92,20 @@ fun OTPVerifyScreen(shipmentId: String, onBack: () -> Unit) {
         }
     }
 
+    var showReturnPrompt by remember { mutableStateOf(false) }
+
     if (showSuccess) {
         AlertDialog(
-            onDismissRequest = onBack,
+            onDismissRequest = { 
+                showSuccess = false
+                showReturnPrompt = true 
+            },
             confirmButton = {
-                TextButton(onClick = onBack) { 
-                    Text("DONE", fontWeight = FontWeight.Bold, color = SuccessGreen) 
+                TextButton(onClick = { 
+                    showSuccess = false
+                    showReturnPrompt = true 
+                }) { 
+                    Text("NEXT", fontWeight = FontWeight.Bold, color = SuccessGreen) 
                 }
             },
             title = { 
@@ -120,6 +128,37 @@ fun OTPVerifyScreen(shipmentId: String, onBack: () -> Unit) {
                         color = TextSecondary
                     )
                 }
+            },
+            shape = MaterialTheme.shapes.large,
+            containerColor = DarkSurface
+        )
+    }
+
+    if (showReturnPrompt) {
+        AlertDialog(
+            onDismissRequest = onBack,
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // Logic handled in Dashboard but can trigger state here
+                        onBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+                ) {
+                    Text("YES, FIND LOADS", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onBack) {
+                    Text("NO, GO TO HOME", color = TextSecondary)
+                }
+            },
+            title = { Text("Returning Home?", color = TextPrimary) },
+            text = {
+                Text(
+                    "Would you like us to find return loads back to your home city? You can save fuel and earn more!",
+                    color = TextSecondary
+                )
             },
             shape = MaterialTheme.shapes.large,
             containerColor = DarkSurface

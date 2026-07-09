@@ -1,0 +1,66 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="280dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+
+    <!-- Aerodynamic Semi-Truck (Front 3/4 View) -->
+
+    <!-- Main Trailer Body (Blue) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M30,85 L145,85 L145,160 L30,160 Z" />
+
+    <!-- Cab Top / Aerodynamic Roof (Blue) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M145,85 L190,105 L190,120 L145,120 Z" />
+
+    <!-- Cab Front / Windshield Area (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M190,105 L220,135 L220,165 L145,165 L145,120 L190,120 Z" />
+
+    <!-- Windshield (Light Blue Tint) -->
+    <path
+        android:fillColor="#E1F5FE"
+        android:pathData="M192,108 L212,130 L212,150 L155,150 L155,122 Z" />
+
+    <!-- Front Grille (Beige Accent) -->
+    <path
+        android:fillColor="#F5E6D3"
+        android:pathData="M220,160 L225,165 L225,185 L145,185 L145,165 Z" />
+
+    <!-- Side Skirts / Lower Body (Blue) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M30,160 L145,160 L145,180 L30,180 Z" />
+
+    <!-- Wheels (Dark Gray/Black) -->
+    <path
+        android:fillColor="#263238"
+        android:pathData="M50,175 A12,12 0 1,1 74,175 A12,12 0 1,1 50,175" />
+    <path
+        android:fillColor="#263238"
+        android:pathData="M90,175 A12,12 0 1,1 114,175 A12,12 0 1,1 90,175" />
+    <path
+        android:fillColor="#263238"
+        android:pathData="M175,175 A15,15 0 1,1 205,175 A15,15 0 1,1 175,175" />
+
+    <!-- Wheel Hubs (Silver/White) -->
+    <path
+        android:fillColor="#CFD8DC"
+        android:pathData="M57,175 A5,5 0 1,1 67,175 A5,5 0 1,1 57,175" />
+    <path
+        android:fillColor="#CFD8DC"
+        android:pathData="M97,175 A5,5 0 1,1 107,175 A5,5 0 1,1 97,175" />
+    <path
+        android:fillColor="#CFD8DC"
+        android:pathData="M185,175 A6,6 0 1,1 197,175 A6,6 0 1,1 185,175" />
+
+    <!-- Headlights (White/Yellow Glow) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M218,170 L225,170 L225,175 L218,175 Z" />
+
+</vector>

@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Truckify"
+rootProject.name = "CargoLink"
 include(":app")

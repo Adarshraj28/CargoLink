@@ -21,11 +21,11 @@ val razorpayKey = localProperties.getProperty("RAZORPAY_KEY") ?: ""
 val stripeKey = localProperties.getProperty("STRIPE_KEY") ?: ""
 
 android {
-    namespace = "com.truckify.app"
+    namespace = "com.cargolink.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.truckify.app"
+        applicationId = "com.cargolink.app"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

@@ -1,6 +1,6 @@
-# Truckify - Turning empty trucks into earning assets
+# cargolink - Turning empty trucks into earning assets
 
-Truckify is a next-generation logistics platform connecting Vendors and Drivers with AI-powered route optimization, cost prediction, and secure payments.
+cargolink is a next-generation logistics platform connecting Vendors and Drivers with AI-powered route optimization, cost prediction, and secure payments.
 
 ## Features
 - **AI Logistics Engine**: Powered by Google Gemini for cost prediction and driver matching.

@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -175,11 +176,11 @@ fun OTPVerifyScreen(shipmentId: String, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             CargoLinkTopAppBar(
-                title = "Verify Delivery.",
+                title = "Verify Delivery",
                 onBack = onBack
             )
         },
-        containerColor = DarkBackground
+        containerColor = Beige.copy(alpha = 0.05f)
     ) { padding ->
         Column(
             modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 24.dp),
@@ -190,7 +191,8 @@ fun OTPVerifyScreen(shipmentId: String, onBack: () -> Unit) {
             Text(
                 "Enter Delivery OTP", 
                 style = MaterialTheme.typography.displaySmall,
-                color = TextPrimary
+                color = DarkBlue,
+                fontWeight = FontWeight.ExtraBold
             )
             
             Spacer(modifier = Modifier.height(12.dp))
@@ -198,7 +200,7 @@ fun OTPVerifyScreen(shipmentId: String, onBack: () -> Unit) {
             Text(
                 "Ask the customer for the 6-digit code shown on their screen to complete the verification.", 
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary, 
+                color = Color.Gray, 
                 textAlign = TextAlign.Center
             )
             
@@ -230,19 +232,21 @@ fun OTPVerifyScreen(shipmentId: String, onBack: () -> Unit) {
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(64.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (isFocused) PrimaryBlue.copy(alpha = 0.1f) else DarkSurface,
+                                .height(64.dp)
+                                .shadow(if (isFocused) 8.dp else 2.dp, RoundedCornerShape(12.dp), spotColor = if (isFocused) PrimaryBlue else Color.Black.copy(alpha = 0.1f)),
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.White,
                             border = androidx.compose.foundation.BorderStroke(
                                 width = if (isFocused) 2.dp else 1.dp,
-                                color = if (isFocused) PrimaryBlue else DarkBorder
+                                color = if (isFocused) PrimaryBlue else Beige.copy(alpha = 0.6f)
                             )
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
                                     text = char,
                                     style = MaterialTheme.typography.headlineLarge,
-                                    color = TextPrimary
+                                    color = DarkBlue,
+                                    fontWeight = FontWeight.ExtraBold
                                 )
                             }
                         }

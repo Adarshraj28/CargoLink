@@ -7,6 +7,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,7 @@ import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.compose.*
+import kotlinx.coroutines.launch
 import com.cargolink.app.firebase.FirestoreManager
 import com.cargolink.app.service.TrackingService
 import com.cargolink.app.models.Shipment
@@ -64,12 +66,11 @@ fun LiveTrackingScreen(
     var driverData by remember { mutableStateOf<Map<String, Any>?>(null) }
     var showRatingDialog by remember { mutableStateOf(false) }
     
-    // Check if we need to show rating dialog
     LaunchedEffect(shipment?.status) {
         if (shipment?.status == "Delivered") {
             val alreadyRated = if (userRole == "Vendor") shipment?.vendorRatedDriver == true else shipment?.driverRatedVendor == true
             if (!alreadyRated) {
-                delay(1000) // Small delay for better UX
+                delay(1000)
                 showRatingDialog = true
             }
         }
@@ -79,12 +80,10 @@ fun LiveTrackingScreen(
         position = CameraPosition.fromLatLngZoom(LatLng(20.5937, 78.9629), 5f)
     }
 
-    // 1. REAL-TIME DATA LISTENING
     DisposableEffect(shipmentId) {
         if (shipmentId.isEmpty()) return@DisposableEffect onDispose {}
         
         val registration = FirestoreManager.listenToShipment(shipmentId) { updatedShipment ->
-            // If load becomes available again (e.g. cancelled by driver), redirect vendor
             if (userRole == "Vendor" && updatedShipment.status == "Available") {
                 onAvailableRedirect(shipmentId)
             }
@@ -95,11 +94,10 @@ fun LiveTrackingScreen(
                     else -> LatLng(updatedShipment.destLat, updatedShipment.destLng)
                 }
                 
-                // If it's the first time, show both driver and destination if possible
                 if (shipment == null && updatedShipment.currentLat != 0.0) {
                     val bounds = LatLngBounds.Builder()
                         .include(LatLng(updatedShipment.currentLat, updatedShipment.currentLng))
-                        .include(LatLng(updatedShipment.destLat, updatedShipment.destLng))
+                        .include(if (updatedShipment.status == "Accepted") LatLng(updatedShipment.pickupLat, updatedShipment.pickupLng) else LatLng(updatedShipment.destLat, updatedShipment.destLng))
                         .build()
                     cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, 150))
                 } else {
@@ -109,12 +107,9 @@ fun LiveTrackingScreen(
             shipment = updatedShipment
         }
         
-        // Listen for OTP if Vendor
         var otpReg: com.google.firebase.firestore.ListenerRegistration? = null
         if (userRole == "Vendor") {
-            otpReg = FirestoreManager.getShipmentOtp(shipmentId) { otp ->
-                deliveryOtp = otp
-            }
+            otpReg = FirestoreManager.getShipmentOtp(shipmentId) { otp -> deliveryOtp = otp }
         }
         
         onDispose {
@@ -123,7 +118,6 @@ fun LiveTrackingScreen(
         }
     }
 
-    // 2. DRIVER LOCATION UPDATES
     if (userRole == "Driver" && shipmentId.isNotEmpty()) {
         val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
         DisposableEffect(shipmentId) {
@@ -147,7 +141,6 @@ fun LiveTrackingScreen(
         }
     }
 
-    // 3. FETCH DRIVER DATA
     LaunchedEffect(shipment?.driverEmail) {
         shipment?.driverEmail?.let { email ->
             if (email.isNotEmpty()) {
@@ -159,27 +152,18 @@ fun LiveTrackingScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = DarkBackground,
-        topBar = {
-            TrackingTopBar(onBack, userRole, context)
-        }
+        topBar = { TrackingTopBar(onBack, userRole, context) }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             
-            // MAP LAYER
             MapLayer(shipment, userRole, cameraPositionState)
 
-            // OVERLAYS (SOS, RECENTER)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (userRole == "Driver") {
                     SOSButton {
                         shipment?.let { s ->
                             FirestoreManager.sendSOSAlert(s.id, s.driverEmail)
-                            Toast.makeText(context, "SOS Alert Sent to Team & Family", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "SOS Alert Sent", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -193,20 +177,13 @@ fun LiveTrackingScreen(
                     },
                     containerColor = DarkSurface,
                     contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.size(56.dp)
+                    shape = CircleShape
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "Recenter", modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.MyLocation, "Recenter")
                 }
             }
 
-            // BOTTOM SHEET (RAPIDO STYLE)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(bottom = 0.dp) // Professional flush look
-            ) {
+            Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                 ShipmentDetailSheet(
                     shipment = shipment,
                     driverData = driverData,
@@ -226,15 +203,9 @@ fun LiveTrackingScreen(
                     onDismiss = { showRatingDialog = false },
                     onSubmit = { review ->
                         if (userRole == "Vendor") {
-                            FirestoreManager.submitDriverReview(review) {
-                                showRatingDialog = false
-                                Toast.makeText(context, "Review submitted!", Toast.LENGTH_SHORT).show()
-                            }
+                            FirestoreManager.submitDriverReview(review) { showRatingDialog = false }
                         } else {
-                            FirestoreManager.submitVendorReview(review) {
-                                showRatingDialog = false
-                                Toast.makeText(context, "Review submitted!", Toast.LENGTH_SHORT).show()
-                            }
+                            FirestoreManager.submitVendorReview(review) { showRatingDialog = false }
                         }
                     }
                 )
@@ -251,7 +222,7 @@ fun TrackingTopBar(onBack: () -> Unit, userRole: String, context: android.conten
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Live Tracking", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
                 Text(
-                    text = if (userRole == "Driver") "You're on the move" else "Your shipment is safe",
+                    text = if (userRole == "Driver") "On the move" else "Shipment tracking active",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary
                 )
@@ -259,21 +230,7 @@ fun TrackingTopBar(onBack: () -> Unit, userRole: String, context: android.conten
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-            }
-        },
-        actions = {
-            IconButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "Track My CargoLink Trip")
-                        putExtra(Intent.EXTRA_TEXT, "I'm on a delivery! Track me live: [CargoLink Link]")
-                    }
-                    context.startActivity(Intent.createChooser(intent, "Share Trip"))
-                }
-            ) {
-                Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = DarkBackground.copy(alpha = 0.8f))
@@ -298,7 +255,7 @@ fun MapLayer(shipment: Shipment?, userRole: String, cameraPositionState: CameraP
 
             Marker(
                 state = MarkerState(position = pickup),
-                title = "Pickup Location",
+                title = "Pickup",
                 icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
             )
             Marker(
@@ -310,23 +267,26 @@ fun MapLayer(shipment: Shipment?, userRole: String, cameraPositionState: CameraP
             if (driver != null) {
                 Marker(
                     state = MarkerState(position = driver),
-                    title = "Current Location",
-                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)
+                    title = "Driver",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
                 )
                 
-                // Route drawing
-                Polyline(
-                    points = if (s.status == "In Transit" || s.status == "Arrived at Destination") {
-                        listOf(driver, dest)
-                    } else {
-                        listOf(driver, pickup, dest)
-                    },
-                    color = PrimaryBlue,
-                    width = 12f,
-                    jointType = JointType.ROUND,
-                    startCap = RoundCap(),
-                    endCap = RoundCap()
-                )
+                val routePoints = when (s.status) {
+                    "Accepted" -> listOf(driver, pickup)
+                    "In Transit" -> listOf(driver, dest)
+                    else -> emptyList<LatLng>()
+                }
+
+                if (routePoints.isNotEmpty()) {
+                    Polyline(
+                        points = routePoints,
+                        color = PrimaryBlue,
+                        width = 12f,
+                        jointType = JointType.ROUND,
+                        startCap = RoundCap(),
+                        endCap = RoundCap()
+                    )
+                }
             }
         }
     }
@@ -345,58 +305,34 @@ fun ShipmentDetailSheet(
     val context = LocalContext.current
     
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(24.dp, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
+        modifier = Modifier.fillMaxWidth().shadow(24.dp, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = BorderStroke(1.dp, Beige.copy(alpha = 0.1f))
     ) {
-        Column(
-            modifier = Modifier
-                .padding(24.dp)
-                .fillMaxWidth()
-        ) {
-            // Drag handle
-            Box(
-                modifier = Modifier
-                    .size(40.dp, 4.dp)
-                    .clip(CircleShape)
-                    .background(DarkBorder)
-                    .align(Alignment.CenterHorizontally)
-            )
-            
+        Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
+            Box(modifier = Modifier.size(40.dp, 4.dp).clip(CircleShape).background(Beige.copy(alpha = 0.2f)).align(Alignment.CenterHorizontally))
             Spacer(modifier = Modifier.height(20.dp))
 
             if (shipment == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), color = PrimaryBlue)
             } else {
-                // Header: Driver / Status Info
+                val statusText = when(shipment.status) {
+                    "Accepted" -> "Driver heading to pickup"
+                    "Arrived" -> "Driver at pickup"
+                    "In Transit" -> "Heading to destination"
+                    else -> shipment.status
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier.size(64.dp).clip(CircleShape).background(DarkCard),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(32.dp))
+                    Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(DarkCard), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.LocalShipping, null, tint = PrimaryBlue, modifier = Modifier.size(32.dp))
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (userRole == "Vendor") (driverData?.get("name") as? String ?: "Finding Driver...") else "Your Active Trip",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Star, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(16.dp))
-                            Text(
-                                text = " ${(driverData?.get("rating") as? Number)?.toDouble() ?: 4.8} • RJ14 GA 2024",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary
-                            )
-                        }
+                        Text(text = if (userRole == "Vendor") (driverData?.get("name") as? String ?: "Driver Found") else "Trip Active", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(text = statusText, color = PrimaryBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
-                    
-                    // Contact Actions
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionButton(icon = Icons.Default.Call, color = SuccessGreen) {
                             val phone = driverData?.get("phone") as? String ?: "9999999999"
@@ -408,56 +344,33 @@ fun ShipmentDetailSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Stats Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    val targetLat = if (shipment.status == "Accepted") shipment.pickupLat else shipment.destLat
+                    val targetLng = if (shipment.status == "Accepted") shipment.pickupLng else shipment.destLng
+                    
                     val distance = if (shipment.currentLat != 0.0) {
-                        calculateDistance(shipment.currentLat, shipment.currentLng, shipment.destLat, shipment.destLng)
+                        calculateDistance(shipment.currentLat, shipment.currentLng, targetLat, targetLng)
                     } else {
                         calculateDistance(shipment.pickupLat, shipment.pickupLng, shipment.destLat, shipment.destLng)
                     }
-                    val etaMinutes = (distance / 40.0 * 60).toInt() // Assume 40km/h avg
+                    val eta = (distance / 40.0 * 60).toInt().coerceAtLeast(1)
                     
-                    TripStat("ETA", "${etaMinutes.coerceAtLeast(1)} mins", Icons.Default.AccessTime)
-                    TripStat("Distance", "${String.format(java.util.Locale.getDefault(), "%.1f", distance)} km", Icons.Default.Route)
+                    TripStat(if (shipment.status == "Accepted") "TO PICKUP" else "TO DROP", "${String.format("%.1f", distance)} km", Icons.Default.Route)
+                    TripStat("ETA", "$eta min", Icons.Default.AccessTime)
                     
                     if (userRole == "Vendor" && shipment.status == "In Transit") {
                         TripStat("OTP", deliveryOtp ?: "----", Icons.Default.VpnKey)
                     } else {
-                        TripStat("Price", shipment.price, Icons.Default.Payments)
+                        TripStat("PRICE", shipment.price, Icons.Default.Payments)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
-
-                // Timeline
                 ProfessionalTimeline(shipment.status)
-
-                if (shipment.isInsured) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = SuccessGreen.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Security, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("This shipment is insured up to ₹${shipment.declaredValue.toInt()}", color = SuccessGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // CTA Buttons
-                if (userRole == "Driver") {
-                    DriverActions(shipment, context, onVerifyClick, onBack)
-                } else if (userRole == "Vendor") {
-                    VendorActions(shipment, onVerifyClick)
-                }
+                if (userRole == "Driver") DriverActions(shipment, context, onVerifyClick, onBack)
+                else VendorActions(shipment, onVerifyClick)
             }
         }
     }
@@ -465,25 +378,17 @@ fun ShipmentDetailSheet(
 
 @Composable
 fun ActionButton(icon: ImageVector, color: Color, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.size(44.dp),
-        shape = CircleShape,
-        color = color.copy(alpha = 0.15f),
-        contentColor = color
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-        }
+    Surface(onClick = onClick, modifier = Modifier.size(44.dp), shape = CircleShape, color = color.copy(alpha = 0.15f), contentColor = color) {
+        Box(contentAlignment = Alignment.Center) { Icon(icon, null, modifier = Modifier.size(20.dp)) }
     }
 }
 
 @Composable
 fun TripStat(label: String, value: String, icon: ImageVector) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(24.dp))
+        Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.height(6.dp))
-        Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = Color.White)
+        Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
     }
 }
@@ -491,21 +396,12 @@ fun TripStat(label: String, value: String, icon: ImageVector) {
 @Composable
 fun ProfessionalTimeline(status: String) {
     val stages = listOf("Accepted", "Arrived", "In Transit", "Reached", "Delivered")
-    val displayStatus = when(status) {
-        "Arrived at Destination" -> "Reached"
-        else -> status
-    }
+    val displayStatus = if (status == "Arrived at Destination") "Reached" else status
     val currentIndex = stages.indexOf(displayStatus).coerceAtLeast(0)
 
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         stages.forEachIndexed { index, stage ->
-            TimelineNode(
-                label = stage,
-                isCompleted = index < currentIndex,
-                isActive = index == currentIndex,
-                isLast = index == stages.size - 1,
-                modifier = Modifier.weight(1f)
-            )
+            TimelineNode(label = stage, isCompleted = index < currentIndex, isActive = index == currentIndex, isLast = index == stages.size - 1, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -513,49 +409,30 @@ fun ProfessionalTimeline(status: String) {
 @Composable
 fun TimelineNode(label: String, isCompleted: Boolean, isActive: Boolean, isLast: Boolean, modifier: Modifier) {
     val color = when {
-        isCompleted -> SuccessGreen
+        isCompleted -> TealGreen
         isActive -> PrimaryBlue
         else -> DarkBorder
     }
-
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
-            // Horizontal Line
-            if (!isLast) {
-                HorizontalDivider(
-                    modifier = Modifier
-                        .fillMaxWidth(0.5f)
-                        .align(Alignment.CenterEnd),
-                    thickness = 2.dp,
-                    color = if (isCompleted) SuccessGreen else DarkBorder
-                )
-            }
-            if (label != "Accepted") {
-                HorizontalDivider(
-                    modifier = Modifier
-                        .fillMaxWidth(0.5f)
-                        .align(Alignment.CenterStart),
-                    thickness = 2.dp,
-                    color = if (isCompleted || isActive) SuccessGreen else DarkBorder
-                )
-            }
-
-            // Dot
+            if (!isLast) HorizontalDivider(modifier = Modifier.fillMaxWidth(0.5f).align(Alignment.CenterEnd), thickness = 2.dp, color = if (isCompleted) TealGreen else DarkBorder)
+            if (label != "Accepted") HorizontalDivider(modifier = Modifier.fillMaxWidth(0.5f).align(Alignment.CenterStart), thickness = 2.dp, color = if (isCompleted || isActive) TealGreen else DarkBorder)
+            
             Box(
                 modifier = Modifier
                     .size(if (isActive) 16.dp else 10.dp)
                     .clip(CircleShape)
                     .background(color)
-                    .then(if (isActive) Modifier.shadow(8.dp, CircleShape, spotColor = PrimaryBlue) else Modifier)
+                    .then(if (isActive) Modifier.shadow(8.dp, CircleShape, spotColor = color) else Modifier)
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isActive) Color.White else TextSecondary,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Center
+            text = label, 
+            style = MaterialTheme.typography.labelSmall, 
+            color = if (isActive) Color.White else TextSecondary, 
+            textAlign = TextAlign.Center,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
         )
     }
 }
@@ -565,211 +442,57 @@ fun DriverActions(shipment: Shipment, context: android.content.Context, onVerify
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         when (shipment.status) {
             "In Transit" -> {
-                Button(
-                    onClick = {
-                        FirestoreManager.markArrivedAtDestination(shipment.id, shipment.vendorEmail) {
-                            Toast.makeText(context, "Marked as Reached Destination", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("I've Reached", fontWeight = FontWeight.Bold)
-                }
+                Button(onClick = { FirestoreManager.markArrivedAtDestination(shipment.id, shipment.vendorEmail) { Toast.makeText(context, "Reached Destination", Toast.LENGTH_SHORT).show() } }, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen), shape = RoundedCornerShape(16.dp)) { Text("I've Reached", fontWeight = FontWeight.Bold) }
             }
             "Arrived at Destination" -> {
-                Button(
-                    onClick = onVerifyClick, 
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("Verify Delivery OTP", fontWeight = FontWeight.Bold)
-                }
+                Button(onClick = onVerifyClick, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue), shape = RoundedCornerShape(16.dp)) { Text("Verify OTP", fontWeight = FontWeight.Bold) }
             }
             else -> {
-                Button(
-                    onClick = {
-                        val targetLat = if (shipment.status == "Accepted" || shipment.status == "Arrived") shipment.pickupLat else shipment.destLat
-                        val targetLng = if (shipment.status == "Accepted" || shipment.status == "Arrived") shipment.pickupLng else shipment.destLng
-                        val gmmIntentUri = Uri.parse("google.navigation:q=$targetLat,$targetLng")
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply { setPackage("com.google.android.apps.maps") }
-                        context.startActivity(mapIntent)
-                    },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.Navigation, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Navigate", fontWeight = FontWeight.Bold)
-                }
+                Button(onClick = {
+                    val targetLat = if (shipment.status == "Accepted") shipment.pickupLat else shipment.destLat
+                    val targetLng = if (shipment.status == "Accepted") shipment.pickupLng else shipment.destLng
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$targetLat,$targetLng")).apply { setPackage("com.google.android.apps.maps") })
+                }, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Navigation, null); Spacer(Modifier.width(8.dp)); Text("Navigate", fontWeight = FontWeight.Bold) }
             }
         }
-        
-        OutlinedButton(
-            onClick = {
-                FirestoreManager.cancelShipmentByDriver(shipment.id, shipment.driverEmail) {
-                    // Stop Background Tracking Service on cancellation
-                    context.stopService(Intent(context, TrackingService::class.java))
-                    onBack()
-                    Toast.makeText(context, "Trip Cancelled", Toast.LENGTH_SHORT).show()
-                }
-            },
-            modifier = Modifier.height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f))
-        ) {
-            Icon(Icons.Default.Close, contentDescription = null)
-        }
+        OutlinedButton(onClick = { FirestoreManager.cancelShipmentByDriver(shipment.id, shipment.driverEmail) { context.stopService(Intent(context, TrackingService::class.java)); onBack(); Toast.makeText(context, "Trip Cancelled", Toast.LENGTH_SHORT).show() } }, modifier = Modifier.height(56.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed)) { Icon(Icons.Default.Close, null) }
     }
 }
 
 @Composable
 fun VendorActions(shipment: Shipment, onVerifyClick: () -> Unit) {
-    if (shipment.status == "Delivered") {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = SuccessGreen.copy(alpha = 0.1f),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Shipment Delivered Successfully!", color = SuccessGreen, fontWeight = FontWeight.Bold)
+    Surface(modifier = Modifier.fillMaxWidth(), color = DarkCard, shape = RoundedCornerShape(16.dp)) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            val icon = if (shipment.status == "Delivered") Icons.Default.CheckCircle else Icons.Default.Info
+            val tint = if (shipment.status == "Delivered") SuccessGreen else InfoBlue
+            val text = when(shipment.status) {
+                "Delivered" -> "Goods Delivered Successfully!"
+                "Accepted" -> "Driver is coming to pick up the goods."
+                "In Transit" -> "Goods are on the way. share OTP at drop."
+                else -> "Trip is active."
             }
-        }
-    } else if (shipment.status == "Arrived at Destination" || shipment.status == "In Transit") {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = DarkCard,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Info, contentDescription = null, tint = InfoBlue)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Provide the Delivery OTP to the driver once goods are received.", color = TextSecondary, fontSize = 13.sp)
-            }
-        }
-    } else {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = DarkCard,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Info, contentDescription = null, tint = InfoBlue)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Waiting for driver to reach pickup location.", color = TextSecondary, fontSize = 13.sp)
-            }
+            Icon(icon, null, tint = tint)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text, color = if (shipment.status == "Delivered") SuccessGreen else TextSecondary, fontSize = 13.sp)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RatingBottomSheet(
-    userRole: String,
-    shipment: Shipment,
-    targetName: String,
-    onDismiss: () -> Unit,
-    onSubmit: (Review) -> Unit
-) {
-    var rating1 by remember { mutableFloatStateOf(0f) }
-    var rating2 by remember { mutableFloatStateOf(0f) }
-    var rating3 by remember { mutableFloatStateOf(0f) }
+fun RatingBottomSheet(userRole: String, shipment: Shipment, targetName: String, onDismiss: () -> Unit, onSubmit: (Review) -> Unit) {
+    var r1 by remember { mutableFloatStateOf(0f) }
+    var r2 by remember { mutableFloatStateOf(0f) }
+    var r3 by remember { mutableFloatStateOf(0f) }
     var feedback by remember { mutableStateOf("") }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = DarkBorder) }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 48.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Box(
-                modifier = Modifier.size(72.dp).clip(CircleShape).background(PrimaryBlue.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Stars, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(36.dp))
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    "Rate your experience",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    "How was your trip with $targetName?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                if (userRole == "Vendor") {
-                    RatingItem(label = "Driving Quality", rating = rating1, onRatingChange = { rating1 = it })
-                    RatingItem(label = "Communication", rating = rating2, onRatingChange = { rating2 = it })
-                    RatingItem(label = "On-time Delivery", rating = rating3, onRatingChange = { rating3 = it })
-                } else {
-                    RatingItem(label = "Vendor Behavior", rating = rating1, onRatingChange = { rating1 = it })
-                    RatingItem(label = "Loading Experience", rating = rating2, onRatingChange = { rating2 = it })
-                    RatingItem(label = "Payment Experience", rating = rating3, onRatingChange = { rating3 = it })
-                }
-                
-                OutlinedTextField(
-                    value = feedback,
-                    onValueChange = { feedback = it },
-                    placeholder = { Text("Additional feedback (optional)", color = TextDisabled) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = PrimaryBlue,
-                        focusedBorderColor = PrimaryBlue,
-                        unfocusedBorderColor = DarkBorder
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-
-            Button(
-                onClick = {
-                    val avg = (rating1 + rating2 + rating3) / 3.0
-                    val review = Review(
-                        shipmentId = shipment.id,
-                        reviewerEmail = if (userRole == "Vendor") shipment.vendorEmail else shipment.driverEmail,
-                        targetEmail = if (userRole == "Vendor") shipment.driverEmail else shipment.vendorEmail,
-                        rating = avg,
-                        feedback = feedback,
-                        drivingRating = if (userRole == "Vendor") rating1 else 0f,
-                        communicationRating = if (userRole == "Vendor") rating2 else 0f,
-                        onTimeRating = if (userRole == "Vendor") rating3 else 0f,
-                        behaviorRating = if (userRole == "Driver") rating1 else 0f,
-                        loadingExpRating = if (userRole == "Driver") rating2 else 0f,
-                        paymentExpRating = if (userRole == "Driver") rating3 else 0f
-                    )
-                    onSubmit(review)
-                },
-                enabled = rating1 > 0 && rating2 > 0 && rating3 > 0,
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text("Submit Review", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = DarkSurface) {
+        Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Text("Rate Trip with $targetName", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+            RatingItem(label = if (userRole == "Vendor") "Driving Quality" else "Vendor Behavior", rating = r1, onRatingChange = { r1 = it })
+            RatingItem(label = if (userRole == "Vendor") "Communication" else "Loading Experience", rating = r2, onRatingChange = { r2 = it })
+            RatingItem(label = if (userRole == "Vendor") "Punctuality" else "Payment Experience", rating = r3, onRatingChange = { r3 = it })
+            OutlinedTextField(value = feedback, onValueChange = { feedback = it }, placeholder = { Text("Add a comment...") }, modifier = Modifier.fillMaxWidth())
+            Button(onClick = { onSubmit(Review(shipmentId = shipment.id, reviewerEmail = if (userRole == "Vendor") shipment.vendorEmail else shipment.driverEmail, targetEmail = if (userRole == "Vendor") shipment.driverEmail else shipment.vendorEmail, rating = (r1+r2+r3)/3.0, feedback = feedback)) }, enabled = r1>0 && r2>0 && r3>0, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Submit") }
         }
     }
 }
@@ -777,47 +500,20 @@ fun RatingBottomSheet(
 @Composable
 fun RatingItem(label: String, rating: Float, onRatingChange: (Float) -> Unit) {
     Column {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            (1..5).forEach { index ->
-                Icon(
-                    imageVector = if (index <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = null,
-                    tint = if (index <= rating) WarningOrange else TextDisabled,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clickable { onRatingChange(index.toFloat()) }
-                        .padding(2.dp)
-                )
+        Text(label, color = TextSecondary, fontSize = 12.sp)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            (1..5).forEach { i ->
+                Icon(if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (i <= rating) WarningOrange else TextDisabled, modifier = Modifier.size(36.dp).clickable { onRatingChange(i.toFloat()) })
             }
         }
     }
 }
+
 @Composable
 fun SOSButton(onClick: () -> Unit) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.size(64.dp).graphicsLayer(scaleX = scale, scaleY = scale),
-        shape = CircleShape,
-        color = ErrorRed,
-        shadowElevation = 12.dp
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Warning, contentDescription = "SOS", tint = Color.White, modifier = Modifier.size(28.dp))
-        }
+    val scale by rememberInfiniteTransition().animateFloat(1f, 1.2f, animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse))
+    Surface(onClick = onClick, modifier = Modifier.size(64.dp).graphicsLayer(scaleX = scale, scaleY = scale), shape = CircleShape, color = ErrorRed, shadowElevation = 12.dp) {
+        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Warning, "SOS", tint = Color.White) }
     }
 }
 

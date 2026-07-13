@@ -15,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -35,7 +37,8 @@ fun ProfileScreen(
     onDocumentsClick: () -> Unit = {},
     onPayoutsClick: () -> Unit = {},
     onSupportClick: () -> Unit = {},
-    onReferClick: () -> Unit = {}
+    onReferClick: () -> Unit = {},
+    onChatbotClick: () -> Unit = {}
 ) {
     var userData by remember { mutableStateOf<Map<String, Any>?>(null) }
     val userEmail = AuthManager.getCurrentUserEmail() ?: ""
@@ -54,10 +57,10 @@ fun ProfileScreen(
     val vehicleNo = userData?.get("vehicleNo") as? String ?: "RJ14GA2345"
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Beige.copy(alpha = 0.05f),
         topBar = {
             CargoLinkTopAppBar(
-                title = "Profile",
+                title = "My Account",
                 onBack = onBack
             )
         }
@@ -81,12 +84,28 @@ fun ProfileScreen(
             }
 
             item {
-                ProfileMenuItemNew(title = "Personal Information", icon = Icons.Default.Person, onClick = onPersonalInfoClick)
-                ProfileMenuItemNew(title = "Documents", icon = Icons.Default.Description, onClick = onDocumentsClick)
-                ProfileMenuItemNew(title = "Payout & Bank Details", icon = Icons.Default.AccountBalance, onClick = onPayoutsClick)
-                ProfileMenuItemNew(title = "Refer & Earn ₹2000", icon = Icons.Default.CardGiftcard, onClick = onReferClick)
-                ProfileMenuItemNew(title = "Support", icon = Icons.Default.HeadsetMic, onClick = onSupportClick)
-                ProfileMenuItemNew(title = "Settings", icon = Icons.Default.Settings, onClick = onSettingsClick)
+                Card(
+                    modifier = Modifier.fillMaxWidth().shadow(8.dp, RoundedCornerShape(24.dp), spotColor = Beige.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Beige.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                        ProfileMenuItemNew(title = "Personal Information", icon = Icons.Default.Person, onClick = onPersonalInfoClick)
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Beige.copy(alpha = 0.2f))
+                        ProfileMenuItemNew(title = "Documents & Identity", icon = Icons.Default.Description, onClick = onDocumentsClick)
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Beige.copy(alpha = 0.2f))
+                        ProfileMenuItemNew(title = "Payments & Wallet", icon = Icons.Default.AccountBalance, onClick = onPayoutsClick)
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Beige.copy(alpha = 0.2f))
+                        ProfileMenuItemNew(title = "Refer friends, earn ₹2000", icon = Icons.Default.CardGiftcard, onClick = onReferClick)
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Beige.copy(alpha = 0.2f))
+                        ProfileMenuItemNew(title = "Get Support", icon = Icons.Default.HeadsetMic, onClick = onSupportClick)
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Beige.copy(alpha = 0.2f))
+                        ProfileMenuItemNew(title = "AI Assistant", icon = Icons.Default.AutoAwesome, onClick = onChatbotClick)
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Beige.copy(alpha = 0.2f))
+                        ProfileMenuItemNew(title = "Account Settings", icon = Icons.Default.Settings, onClick = onSettingsClick)
+                    }
+                }
             }
 
             item {
@@ -99,45 +118,53 @@ fun ProfileScreen(
 @Composable
 fun ProfileHeaderNew(name: String, email: String, rating: Double) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(74.dp)
+                .size(80.dp)
                 .clip(CircleShape)
-                .background(PrimaryBlue.copy(alpha = 0.1f)),
+                .background(PremiumGradient)
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .padding(4.dp)
+                .clip(CircleShape)
+                .background(PrimaryBlue.copy(alpha = 0.05f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(44.dp))
+            Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(40.dp))
         }
 
-        Spacer(modifier = Modifier.width(24.dp))
+        Spacer(modifier = Modifier.width(20.dp))
 
         Column {
             Text(
                 text = name,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 fontSize = 24.sp,
-                color = MaterialTheme.colorScheme.onBackground
+                color = DarkBlue
             )
             Text(
                 text = email, 
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.Gray,
+                fontWeight = FontWeight.Medium
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Surface(
-                color = WarningOrange.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(8.dp)
+                color = WarningOrange.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, WarningOrange.copy(alpha = 0.2f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "$rating", color = WarningOrange, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    Icon(Icons.Default.Star, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "$rating Top Rated", color = WarningOrange, fontWeight = FontWeight.Black, fontSize = 12.sp)
                 }
             }
         }
@@ -147,24 +174,29 @@ fun ProfileHeaderNew(name: String, email: String, rating: Double) {
 @Composable
 fun VehicleDetailsCardNew(vehicleNo: String, onClick: () -> Unit = {}) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        modifier = Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(24.dp), spotColor = PrimaryBlue.copy(alpha = 0.15f)).clickable { onClick() },
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Beige.copy(alpha = 0.4f))
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(text = "VEHICLE DETAILS", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier.background(Brush.horizontalGradient(listOf(Color.White, PrimaryBlue.copy(alpha = 0.02f)))).padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "PRIMARY VEHICLE", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = vehicleNo, fontWeight = FontWeight.Black, fontSize = 22.sp, color = DarkBlue)
+                Text(text = "Heavy Duty • 14 Wheeler", color = PrimaryBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Surface(
+                color = PrimaryBlue.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.size(64.dp)
             ) {
-                Column {
-                    Text(text = vehicleNo, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = "14 Wheels • Open Body", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(36.dp))
                 }
-                Icon(Icons.Default.LocalShipping, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(50.dp))
             }
         }
     }

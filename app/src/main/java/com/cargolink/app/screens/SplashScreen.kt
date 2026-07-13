@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.sp
 import com.cargolink.app.R
 import kotlinx.coroutines.delay
 
+import androidx.compose.ui.text.TextStyle
+import com.cargolink.app.ui.theme.BlueGradient
+
 @Composable
 fun SplashScreen(
     onAnimationFinished: () -> Unit
@@ -45,12 +48,34 @@ fun SplashScreen(
         onAnimationFinished()
     }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "background")
+    val circleScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(tween(3000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "circleScale"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White),
         contentAlignment = Alignment.Center
     ) {
+        // Decorative background circles
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = Color(0xFF0066FF).copy(alpha = 0.03f),
+                radius = 400.dp.toPx() * circleScale,
+                center = center.copy(x = size.width * 0.9f, y = size.height * 0.1f)
+            )
+            drawCircle(
+                color = Color(0xFF0066FF).copy(alpha = 0.02f),
+                radius = 300.dp.toPx() * circleScale,
+                center = center.copy(x = size.width * 0.1f, y = size.height * 0.9f)
+            )
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -69,8 +94,8 @@ fun SplashScreen(
             Text(
                 text = "CARGOLINK",
                 fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0066FF),
+                fontWeight = FontWeight.Black,
+                style = TextStyle(brush = BlueGradient),
                 letterSpacing = 4.sp
             )
             

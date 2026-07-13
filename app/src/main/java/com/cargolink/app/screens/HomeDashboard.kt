@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cargolink.app.components.*
@@ -120,7 +121,6 @@ fun HomeDashboard(
         it.status == "Accepted" || it.status == "Arrived" || it.status == "In Transit" 
     }
     
-    // CLEANUP: Filter out the active trip from recent shipments to avoid double-showing
     val recentShipments = activeShipments.filter { it.status == "Available" }.take(3)
 
     LaunchedEffect(Unit) {
@@ -173,8 +173,8 @@ fun HomeDashboard(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { }) { Icon(Icons.Default.Home, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(28.dp)) }
-                        IconButton(onClick = { handleAction(onOrdersClick) }) { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(28.dp)) }
+                        IconButton(onClick = { }) { BottomItem(icon = Icons.Default.Home, selected = true) }
+                        IconButton(onClick = { handleAction(onOrdersClick) }) { BottomItem(icon = Icons.AutoMirrored.Filled.List, selected = false) }
                         
                         Box(
                             modifier = Modifier
@@ -199,8 +199,8 @@ fun HomeDashboard(
                             )
                         }
 
-                        IconButton(onClick = { handleAction(onHistoryClick) }) { Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(28.dp)) }
-                        IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(28.dp)) }
+                        IconButton(onClick = { handleAction(onHistoryClick) }) { BottomItem(icon = Icons.Default.History, selected = false) }
+                        IconButton(onClick = onSettingsClick) { BottomItem(icon = Icons.Default.Settings, selected = false) }
                     }
                 }
             }
@@ -216,71 +216,89 @@ fun HomeDashboard(
             ) {
                 item {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp, top = 10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text(
-                                text = if (isGuest) "Welcome to CargoLink" else "Hello, $userName",
-                                style = MaterialTheme.typography.displayMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = 28.sp
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (isGuest) "Welcome to CargoLink" else "Hello, $userName",
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 28.sp
+                                )
+                                if (isGuest && authViewModel != null) {
+                                    IconButton(
+                                        onClick = { authViewModel.updateRole("Vendor") },
+                                        modifier = Modifier
+                                            .padding(start = 12.dp)
+                                            .size(32.dp)
+                                            .background(Color.Magenta.copy(alpha = 0.1f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Code,
+                                            contentDescription = "Dev Bypass",
+                                            tint = Color.Magenta,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
                             if (isGuest) {
                                 Text(
-                                    text = "Complete your profile to start booking",
+                                    text = "Complete profile to start booking",
                                     color = PrimaryBlue,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
                                     modifier = Modifier.clickable { onCompleteProfile() }
                                 )
                             } else {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Verified, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Verified Business", 
-                                        style = MaterialTheme.typography.labelMedium,
+                                        text = "Verified Business Account", 
                                         color = SuccessGreen,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
                                 }
                             }
                         }
-                        Surface(
-                            onClick = { handleAction(onNotificationClick) },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                            shadowElevation = 2.dp
-                        ) {
-                            Icon(
-                                Icons.Default.Notifications, 
-                                contentDescription = null, 
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(10.dp).size(24.dp)
-                            )
+                        IconButton(onClick = { handleAction(onNotificationClick) }) {
+                            Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
 
                 item {
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        item { KPICard("Active Ships", activeShipments.size.toString(), Icons.Default.LocalShipping, PrimaryBlue) }
-                        item { KPICard("Monthly Spend", String.format(Locale.getDefault(), "₹%.1fL", monthlySpend / 100000.0), Icons.Default.Payments, SuccessGreen) }
-                        item { KPICard("On-Time Rate", "$onTimeRate%", Icons.Default.Timer, WarningOrange) }
-                        item { KPICard("Savings", String.format(Locale.getDefault(), "₹%.1fL", costSaved / 100000.0), Icons.Default.Savings, InfoBlue) }
+                        DashboardMetricCard(
+                            modifier = Modifier.weight(1f),
+                            label = "Active Ships",
+                            value = activeShipments.size.toString(),
+                            icon = Icons.Default.LocalShipping,
+                            color = PrimaryBlue
+                        )
+                        DashboardMetricCard(
+                            modifier = Modifier.weight(1f),
+                            label = "Monthly Spend",
+                            value = String.format(Locale.getDefault(), "₹%.1fL", monthlySpend / 100000.0),
+                            icon = Icons.Default.AccountBalanceWallet,
+                            color = SuccessGreen
+                        )
                     }
                 }
 
                 item {
                     SectionHeader(title = "Quick Actions")
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         QuickActionBtn("Post Load", Icons.Default.AddBox, PrimaryBlue) { handleAction(onCreateClick) }
@@ -290,44 +308,53 @@ fun HomeDashboard(
                     }
                 }
 
-                item {
-                    AnimatedVisibility(
-                        visible = activeTrip != null,
-                        enter = slideInVertically { -it } + fadeIn(),
-                        exit = slideOutVertically { -it } + fadeOut()
-                    ) {
-                        activeTrip?.let { trip ->
+                if (activeTrip != null) {
+                    item {
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = slideInVertically { -it } + fadeIn()
+                        ) {
                             Column {
-                                Spacer(modifier = Modifier.height(12.dp))
+                                SectionHeader(title = "Ongoing Shipment")
                                 ActiveTripCard(
-                                    shipmentId = trip.id,
-                                    origin = trip.pickupAddress,
-                                    destination = trip.destinationAddress,
-                                    pickupLat = trip.pickupLat,
-                                    pickupLng = trip.pickupLng,
-                                    destLat = trip.destLat,
-                                    destLng = trip.destLng,
-                                    status = trip.status,
-                                    vendorEmail = trip.vendorEmail,
+                                    shipmentId = activeTrip.id,
+                                    origin = activeTrip.pickupAddress,
+                                    destination = activeTrip.destinationAddress,
+                                    pickupLat = activeTrip.pickupLat,
+                                    pickupLng = activeTrip.pickupLng,
+                                    destLat = activeTrip.destLat,
+                                    destLng = activeTrip.destLng,
+                                    status = activeTrip.status,
+                                    vendorEmail = activeTrip.vendorEmail,
                                     onTrackClick = onTrackClick,
-                                    onQrClick = { id -> onQrClick(id, trip.status) }
+                                    onQrClick = { id -> onQrClick(id, activeTrip.status) }
                                 )
                             }
                         }
                     }
-                    
-                    if (activeTrip == null && !isGuest) {
+                } else if (!isGuest) {
+                    item {
                         Card(
-                            modifier = Modifier.fillMaxWidth().height(120.dp).padding(top = 16.dp),
-                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            shape = RoundedCornerShape(24.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.CloudQueue, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(32.dp))
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("No active shipments found", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
+                            Column(
+                                modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(Icons.Default.CloudQueue, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(44.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("No Active Shipments", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Start by posting a new load request", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Button(
+                                    onClick = { handleAction(onCreateClick) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Book Now", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -345,7 +372,7 @@ fun HomeDashboard(
                             Column(modifier = Modifier.padding(20.dp)) {
                                 Text("Complete Your Profile", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = PrimaryBlue)
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("Unlock all features by completing your business profile. It only takes a minute.", fontSize = 14.sp)
+                                Text("Unlock premium fleet tracking and verified driver matching by completing your profile.", fontSize = 14.sp)
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Button(onClick = onCompleteProfile, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)) {
                                     Text("Get Started")
@@ -356,42 +383,31 @@ fun HomeDashboard(
                 }
 
                 item {
-                    val beigeBackground = Color(0xFFFDF5E6)
+                    val beigeBackground = Color(0xFFFFF8E1)
                     val deepBrown = Color(0xFF5D4037)
                     
+                    Spacer(modifier = Modifier.height(16.dp))
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 24.dp)
-                            .clickable { onReferClick() },
-                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onReferClick() },
+                        shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(containerColor = beigeBackground),
-                        border = BorderStroke(1.dp, Color(0xFFD2B48C).copy(alpha = 0.5f))
+                        border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.5f))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(50.dp),
-                                shape = CircleShape,
-                                color = deepBrown.copy(alpha = 0.1f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    val infiniteTransition = rememberInfiniteTransition(label = "referPulse")
-                                    val scale by infiniteTransition.animateFloat(
-                                        initialValue = 1f,
-                                        targetValue = 1.1f,
-                                        animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
-                                        label = "scale"
-                                    )
-                                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = deepBrown, modifier = Modifier.scale(scale))
-                                }
+                        Row(modifier = Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(color = Color.White, shape = CircleShape, modifier = Modifier.size(48.dp)) {
+                                val infiniteTransition = rememberInfiniteTransition(label = "referPulse")
+                                val scale by infiniteTransition.animateFloat(
+                                    initialValue = 1f,
+                                    targetValue = 1.15f,
+                                    animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+                                    label = "scale"
+                                )
+                                Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = WarningOrange, modifier = Modifier.padding(12.dp).scale(scale))
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
-                                Text("Refer & Earn ₹2000", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = deepBrown)
-                                Text("Invite your friends and earn rewards", fontSize = 13.sp, color = deepBrown.copy(alpha = 0.6f))
+                                Text("Refer & Earn ₹2,000", fontWeight = FontWeight.Black, color = deepBrown, fontSize = 16.sp)
+                                Text("Invite other businesses", fontSize = 12.sp, color = deepBrown.copy(alpha = 0.7f))
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = deepBrown)
@@ -417,9 +433,9 @@ fun HomeDashboard(
                 } else if (recentShipments.isEmpty()) {
                     item {
                         Text(
-                            text = "No pending shipments found",
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            text = "No recent shipments found",
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp),
+                            textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -439,6 +455,7 @@ fun HomeDashboard(
                             },
                             userRole = "Vendor"
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
                 
@@ -452,11 +469,33 @@ fun HomeDashboard(
                 onClick = onChatbotClick,
                 containerColor = PrimaryBlue,
                 contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
-                elevation = FloatingActionButtonDefaults.elevation(8.dp)
+                shape = RoundedCornerShape(18.dp),
+                elevation = FloatingActionButtonDefaults.elevation(12.dp)
             ) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assistant")
             }
+        }
+    }
+}
+
+@Composable
+fun DashboardMetricCard(modifier: Modifier = Modifier, label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.1f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Surface(color = color.copy(alpha = 0.1f), shape = RoundedCornerShape(12.dp), modifier = Modifier.size(36.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = label, color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Text(text = value, color = DarkBlue, fontWeight = FontWeight.Black, fontSize = 16.sp, maxLines = 1)
         }
     }
 }

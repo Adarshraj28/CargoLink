@@ -8,6 +8,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.google.android.gms.maps.MapsInitializer
+import com.google.android.gms.maps.OnMapsSdkInitializedCallback
 import com.google.android.libraries.places.api.Places
 import com.cargolink.app.firebase.AuthManager
 import com.cargolink.app.firebase.FirestoreManager
@@ -44,9 +46,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.fragment.app.FragmentActivity
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity(), PaymentResultListener {
+class MainActivity : FragmentActivity(), PaymentResultListener {
 
     private val authViewModel: AuthViewModel by viewModels()
     private lateinit var paymentSheet: PaymentSheet
@@ -70,6 +73,13 @@ class MainActivity : ComponentActivity(), PaymentResultListener {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         
+        MapsInitializer.initialize(applicationContext, MapsInitializer.Renderer.LATEST) { renderer ->
+            when (renderer) {
+                MapsInitializer.Renderer.LATEST -> android.util.Log.d("CargoLink", "The latest version of the renderer is used.")
+                MapsInitializer.Renderer.LEGACY -> android.util.Log.d("CargoLink", "The legacy version of the renderer is used.")
+            }
+        }
+
         android.util.Log.d("CargoLink", "MainActivity: onCreate")
 
         // Listen for real-time notifications from Firestore
@@ -277,8 +287,8 @@ fun CargoLinkApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
 
     var selectedShipmentId by rememberSaveable { mutableStateOf("") }
-
     var splashFinished by remember { mutableStateOf(false) }
+    val shipmentViewModel: com.cargolink.app.viewmodel.ShipmentViewModel = hiltViewModel()
 
     LaunchedEffect(isAuthChecked, isLoading, isLoggedIn, isPhoneVerified, userRole, navBackStackEntry, splashFinished) {
         android.util.Log.d("CargoLink", "CargoLinkApp: isAuthChecked=$isAuthChecked, isLoading=$isLoading, splashFinished=$splashFinished")
@@ -410,37 +420,8 @@ fun CargoLinkApp(
         }
         composable(Screen.Home.route) {
             val userRole by authViewModel.userRole.collectAsStateWithLifecycle()
-            val isGuest = userRole == "Guest"
             
-            if (userRole?.equals("Vendor", ignoreCase = true) == true) {
-                HomeDashboard(
-                    onCreateClick = { navController.navigate(Screen.Create.route) },
-                    onNotificationClick = { navController.navigate(Screen.Notifications.route) },
-                    onSettingsClick = { navController.navigate(Screen.Settings.route) },
-                    onSearchClick = { navController.navigate(Screen.Search.route) },
-                    onFleetClick = { navController.navigate(Screen.FleetHeatmap.route) },
-                    onRoutesClick = { navController.navigate(Screen.Routes.route) },
-                    onPaymentsClick = { navController.navigate(Screen.Payments.route) },
-                    onOrdersClick = { navController.navigate(Screen.Orders.route) },
-                    onHistoryClick = { navController.navigate(Screen.History.route) },
-                    onChatbotClick = { navController.navigate(Screen.Chatbot.route) },
-                    onTrackClick = { id ->
-                        selectedShipmentId = id
-                        navController.navigate(Screen.Tracking.route)
-                    },
-                    onVerifyClick = { navController.navigate(Screen.Verification.route) },
-                    onQrClick = { id, status ->
-                        selectedShipmentId = id
-                        navController.navigate(Screen.QrShow.route)
-                    },
-                    onDriversClick = { navController.navigate(Screen.Drivers.route) },
-                    onReferClick = { navController.navigate(Screen.ReferEarn.route) },
-                    viewModel = hiltViewModel(),
-                    isGuest = false,
-                    onCompleteProfile = { navController.navigate(Screen.EditProfile.route) },
-                    authViewModel = authViewModel
-                )
-            } else if (userRole?.equals("Driver", ignoreCase = true) == true) {
+            if (userRole?.equals("Driver", ignoreCase = true) == true) {
                 DriverDashboard(
                     onNotificationClick = { navController.navigate(Screen.Notifications.route) },
                     onSettingsClick = { navController.navigate(Screen.Settings.route) },
@@ -473,14 +454,13 @@ fun CargoLinkApp(
                     authViewModel = authViewModel
                 )
             } else {
-                // Guest mode - show Vendor dashboard with restricted features
-                HomeDashboard(
+                val userRole by authViewModel.userRole.collectAsStateWithLifecycle()
+                DashboardScreen(
                     onCreateClick = { navController.navigate(Screen.Create.route) },
                     onNotificationClick = { navController.navigate(Screen.Notifications.route) },
                     onSettingsClick = { navController.navigate(Screen.Settings.route) },
                     onSearchClick = { navController.navigate(Screen.Search.route) },
                     onFleetClick = { navController.navigate(Screen.FleetHeatmap.route) },
-                    onRoutesClick = { navController.navigate(Screen.Routes.route) },
                     onPaymentsClick = { navController.navigate(Screen.Payments.route) },
                     onOrdersClick = { navController.navigate(Screen.Orders.route) },
                     onHistoryClick = { navController.navigate(Screen.History.route) },
@@ -489,23 +469,28 @@ fun CargoLinkApp(
                         selectedShipmentId = id
                         navController.navigate(Screen.Tracking.route)
                     },
-                    onVerifyClick = { navController.navigate(Screen.Verification.route) },
                     onQrClick = { id, status ->
                         selectedShipmentId = id
                         navController.navigate(Screen.QrShow.route)
                     },
-                    onDriversClick = { navController.navigate(Screen.Drivers.route) },
-                    onReferClick = { navController.navigate(Screen.ReferEarn.route) },
-                    viewModel = hiltViewModel(),
-                    isGuest = true,
+                    isGuest = userRole == "Guest",
                     onCompleteProfile = { navController.navigate(Screen.EditProfile.route) },
+                    viewModel = hiltViewModel(),
                     authViewModel = authViewModel
                 )
             }
         }
         composable(Screen.FleetHeatmap.route) { FleetHeatmapScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Notifications.route) { NotificationScreen(onBack = { navController.popBackStack() }) }
-        composable(Screen.Payments.route) { PaymentScreen(onBack = { navController.popBackStack() }) }
+        composable(Screen.Payments.route) { 
+            PaymentScreen(
+                onBack = { navController.popBackStack() },
+                onPaymentComplete = { 
+                    navController.popBackStack()
+                    Toast.makeText(context, "Payment Successful!", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
         composable(Screen.Drivers.route) { DriversScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Routes.route) { RoutesScreen(onBack = { navController.popBackStack() }) }
         composable(Screen.Search.route) {
@@ -601,19 +586,94 @@ fun CargoLinkApp(
                 onDocumentsClick = { navController.navigate(Screen.Verification.route) },
                 onPayoutsClick = { navController.navigate(Screen.Payments.route) },
                 onSupportClick = { navController.navigate(Screen.Support.route) },
-                onReferClick = { navController.navigate(Screen.ReferEarn.route) }
+                onReferClick = { navController.navigate(Screen.ReferEarn.route) },
+                onChatbotClick = { navController.navigate(Screen.Chatbot.route) }
             )
         }
         composable(Screen.Create.route) { 
-            CreateShipmentScreen(
+            navController.navigate(Screen.PickupDetails.route)
+        }
+        composable(Screen.PickupDetails.route) {
+            PickupDetailsScreen(
                 onBack = { navController.popBackStack() },
-                onPostSuccess = { id ->
+                onContinue = { navController.navigate(Screen.DropDetails.route) },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.DropDetails.route) {
+            DropDetailsScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { navController.navigate(Screen.LoadDetailsCreate.route) },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.LoadDetailsCreate.route) {
+            LoadDetailsScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { navController.navigate(Screen.TruckSelection.route) },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.TruckSelection.route) {
+            TruckSelectionScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { navController.navigate(Screen.PriceEstimate.route) },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.PriceEstimate.route) {
+            PriceEstimateScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { navController.navigate(Screen.AIDriverMatch.route) },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.AIDriverMatch.route) {
+            AIDriverMatchScreen(
+                onBack = { navController.popBackStack() },
+                onContinue = { driver ->
+                    navController.navigate(Screen.ReviewShipment.route)
+                },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.ReviewShipment.route) {
+            ReviewShipmentScreen(
+                onBack = { navController.popBackStack() },
+                onEdit = { step -> 
+                    val target = when(step) {
+                        1 -> Screen.PickupDetails.route
+                        2 -> Screen.DropDetails.route
+                        3 -> Screen.LoadDetailsCreate.route
+                        4 -> Screen.TruckSelection.route
+                        5 -> Screen.PriceEstimate.route
+                        else -> Screen.PickupDetails.route
+                    }
+                    navController.navigate(target) {
+                        popUpTo(Screen.ReviewShipment.route) { inclusive = true }
+                    }
+                },
+                onConfirm = { id ->
                     selectedShipmentId = id
-                    navController.navigate(Screen.Confirming.route) {
+                    navController.navigate(Screen.ShipmentConfirmed.route)
+                },
+                viewModel = shipmentViewModel
+            )
+        }
+        composable(Screen.ShipmentConfirmed.route) {
+            ShipmentConfirmedScreen(
+                onTrackShipment = {
+                    navController.navigate(Screen.Tracking.route) {
                         popUpTo(Screen.Home.route)
                     }
+                },
+                onReturnDashboard = {
+                    shipmentViewModel.reset()
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
                 }
-            ) 
+            )
         }
         composable(Screen.Confirming.route) {
             ShipmentConfirmingScreen(

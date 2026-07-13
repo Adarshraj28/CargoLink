@@ -11,7 +11,7 @@ data class Shipment(
     val destLat: Double = 0.0,
     val destLng: Double = 0.0,
     val price: String = "₹0",
-    val status: String = "Available", // Available, In Transit, Delivered
+    val status: String = "Available", // Available, In Transit, Delivered, Searching for Driver
     val weight: String = "",
     val loadType: String = "General",
     val truckType: String = "Mini Truck",
@@ -26,6 +26,34 @@ data class Shipment(
     val paymentMode: String = "Escrow", // Escrow, COD
     val paymentStatus: String = "Pending", // Pending, Escrowed, Success, Refunded
     val escrowTxnId: String = "",
+    
+    // Step 1: Pickup Details
+    val pickupContactName: String = "",
+    val pickupContactNumber: String = "",
+    val scheduledPickupDate: String = "",
+    val scheduledPickupTime: String = "",
+
+    // Step 2: Drop Details
+    val receiverName: String = "",
+    val receiverPhone: String = "",
+    val scheduledDropDate: String = "",
+    val scheduledDropTime: String = "",
+
+    // Step 3: Load Information
+    val dimensions: String = "",
+    val numPackages: Int = 1,
+    val loadValue: Double = 0.0,
+    val isFragile: Boolean = false,
+    val isHazardous: Boolean = false,
+    val images: List<String> = emptyList(),
+
+    // Step 4: Truck Requirements
+    val numTrucks: Int = 1,
+    val isFullTruck: Boolean = true,
+    val isTemperatureControlled: Boolean = false,
+
+    // Step 5: Pricing
+    val isPriceNegotiable: Boolean = false,
     
     // Physical Proofs
     val pickupTime: Long = 0,

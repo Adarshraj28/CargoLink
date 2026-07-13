@@ -22,7 +22,10 @@ class OrdersViewModel @Inject constructor() : ViewModel() {
 
     private var shipmentsListener: ListenerRegistration? = null
 
+    private var lastRole: String = "Vendor"
+
     fun observeOrders(userRole: String) {
+        lastRole = userRole
         val email = AuthManager.getCurrentUserEmail() ?: return
         
         _isLoading.value = true
@@ -38,6 +41,10 @@ class OrdersViewModel @Inject constructor() : ViewModel() {
                 _isLoading.value = false
             }
         }
+    }
+
+    fun refresh() {
+        observeOrders(lastRole)
     }
 
     fun repostShipment(shipment: Shipment, onSuccess: (String) -> Unit, onError: (String) -> Unit) {

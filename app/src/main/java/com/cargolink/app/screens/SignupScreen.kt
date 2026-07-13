@@ -52,11 +52,12 @@ fun SignupScreen(
     }
 
     Scaffold(
+        containerColor = Beige.copy(alpha = 0.05f),
         topBar = {
             TopAppBar(
                 title = { 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (!codeSent) "Sign Up" else "Verify OTP", fontWeight = FontWeight.Bold)
+                        Text(if (!codeSent) "Sign Up" else "Verify OTP", fontWeight = FontWeight.Bold, color = DarkBlue)
                         if (codeSent) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Box(modifier = Modifier.size(4.dp).background(PrimaryBlue, androidx.compose.foundation.shape.CircleShape))
@@ -68,9 +69,10 @@ fun SignupScreen(
                         if (codeSent) authViewModel.resetPhoneAuthState()
                         else onBack()
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = DarkBlue)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { padding ->
@@ -87,14 +89,15 @@ fun SignupScreen(
             Text(
                 text = if (!codeSent) "Create Account" else "Verification",
                 style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = DarkBlue,
+                fontWeight = FontWeight.ExtraBold
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = if (!codeSent) "Sign up with your phone number to get started" 
                        else "We've sent a code to +91 $phoneNumber",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.Gray,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             
@@ -103,7 +106,8 @@ fun SignupScreen(
             if (!codeSent) {
                 Text("Phone Number", 
                     style = MaterialTheme.typography.titleSmall, 
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = DarkBlue,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Start)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -111,11 +115,11 @@ fun SignupScreen(
                     Surface(
                         modifier = Modifier.width(80.dp).height(56.dp),
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        color = Color.White,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Beige.copy(alpha = 0.6f))
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("+91", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                            Text("+91", style = MaterialTheme.typography.bodyLarge, color = DarkBlue, fontWeight = FontWeight.Bold)
                         }
                     }
                     CargoLinkTextField(
@@ -134,14 +138,14 @@ fun SignupScreen(
                         checked = agreeToTerms,
                         onCheckedChange = { agreeToTerms = it },
                         colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            checkedColor = PrimaryBlue,
+                            uncheckedColor = Color.Gray
                         )
                     )
                     Text(
                         text = "I agree to the Terms of Service and Privacy Policy",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color.Gray,
                         modifier = Modifier.clickable { agreeToTerms = !agreeToTerms }
                     )
                 }
@@ -187,7 +191,7 @@ fun SignupScreen(
                 )
                 
                 TextButton(onClick = { authViewModel.resetPhoneAuthState() }) {
-                    Text("Change Phone Number", color = PrimaryBlue)
+                    Text("Change Phone Number", color = PrimaryBlue, fontWeight = FontWeight.Bold)
                 }
             }
             
@@ -200,11 +204,11 @@ fun SignupScreen(
                 Text(
                     "Already have an account? ", 
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.Gray
                 )
                 Text(
                     "Login",
-                    color = MaterialTheme.colorScheme.primary,
+                    color = PrimaryBlue,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.clickable { onBack() }

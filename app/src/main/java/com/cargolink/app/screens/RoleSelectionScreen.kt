@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cargolink.app.ui.theme.*
 
+import androidx.compose.ui.draw.shadow
+
 @Composable
 fun RoleSelectionScreen(
     onRoleSelected: (String) -> Unit
@@ -27,7 +29,7 @@ fun RoleSelectionScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Beige.copy(alpha = 0.05f))
     ) {
         Column(
             modifier = Modifier
@@ -39,7 +41,8 @@ fun RoleSelectionScreen(
             Text(
                 text = "Choose Your Role",
                 style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = DarkBlue,
+                fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center
             )
             
@@ -48,7 +51,7 @@ fun RoleSelectionScreen(
             Text(
                 text = "Select how you want to use CargoLink",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.Gray,
                 textAlign = TextAlign.Center
             )
             
@@ -83,10 +86,11 @@ fun RoleCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable { onClick() }
+            .shadow(8.dp, RoundedCornerShape(24.dp), spotColor = Beige.copy(alpha = 0.5f)),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        color = Color.White,
+        border = BorderStroke(1.dp, Beige.copy(alpha = 0.6f))
     ) {
         Row(
             modifier = Modifier
@@ -96,13 +100,13 @@ fun RoleCard(
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(16.dp)),
+                    .background(PrimaryBlue.copy(alpha = 0.1f), RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = PrimaryBlue,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -113,12 +117,13 @@ fun RoleCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = DarkBlue,
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.Gray
                 )
             }
         }

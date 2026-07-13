@@ -24,10 +24,25 @@ val SuccessGreen = Color(0xFF10B981)
 val ErrorRed = Color(0xFFEF4444)
 val WarningOrange = Color(0xFFF59E0B)
 val InfoBlue = Color(0xFF3B82F6)
+val SoftPurple = Color(0xFF8B5CF6)
+val TealGreen = Color(0xFF14B8A6)
+val NavyDeep = Color(0xFF1E293B)
 
 // Gradients
 val BlueGradient = Brush.verticalGradient(
     colors = listOf(PrimaryBlue, PrimaryBlueDark)
+)
+
+val PremiumGradient = Brush.linearGradient(
+    colors = listOf(PrimaryBlue, SoftPurple)
+)
+
+val BeigeGradient = Brush.verticalGradient(
+    colors = listOf(Color(0xFFFDF8F3), Color(0xFFE8D5C4))
+)
+
+val SuccessGradient = Brush.linearGradient(
+    colors = listOf(SuccessGreen, TealGreen)
 )
 
 val SurfaceGradient = Brush.verticalGradient(
@@ -39,6 +54,7 @@ val DarkBlue = PrimaryBlueDark
 val LightBlue = PrimaryBlueLight
 val Background = Color(0xFFF8FAFC)
 val Beige = Color(0xFFE8D5C4)
+val SoftBeige = Color(0xFFFDF8F3)
 val BackgroundWhite = Color.White
 val AccentGreen = SuccessGreen
 val BackgroundDark = DarkBackground

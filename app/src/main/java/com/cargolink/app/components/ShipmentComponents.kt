@@ -27,49 +27,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 
-@Composable
-fun LocationText(
-    lat: Double,
-    lng: Double,
-    defaultAddress: String = "",
-    style: androidx.compose.ui.text.TextStyle = LocalTextStyle.current,
-    color: Color = Color.Unspecified,
-    fontWeight: FontWeight? = null,
-    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
-    maxLines: Int = 1
-) {
-    val context = LocalContext.current
-    var address by remember(lat, lng, defaultAddress) { 
-        val initial = if (defaultAddress.isNotEmpty() && !defaultAddress.any { it.isDigit() }) {
-            defaultAddress.split(",").first()
-        } else {
-            "Loading..."
-        }
-        mutableStateOf(initial)
-    }
-
-    LaunchedEffect(lat, lng, defaultAddress) {
-        if (lat != 0.0 && lng != 0.0) {
-            val friendly = withContext(Dispatchers.IO) {
-                getFriendlyAddress(context, lat, lng)
-            }
-            address = friendly
-        } else if (defaultAddress.isNotEmpty()) {
-            address = defaultAddress.split(",").first()
-        }
-    }
-
-    Text(
-        text = address,
-        style = style,
-        color = color,
-        fontFamily = Inter,
-        fontWeight = fontWeight,
-        fontSize = fontSize,
-        maxLines = maxLines,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-    )
-}
+import com.cargolink.app.components.LocationText
+import com.cargolink.app.components.CargoLinkButton
+import com.cargolink.app.components.InfoChip
 
 @Composable
 fun ActiveShipmentCard(

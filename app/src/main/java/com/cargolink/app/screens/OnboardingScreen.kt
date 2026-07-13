@@ -3,6 +3,7 @@ package com.cargolink.app.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -19,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +32,8 @@ import com.cargolink.app.ui.theme.PrimaryBlue
 import com.cargolink.app.ui.theme.TextPrimary
 import com.cargolink.app.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
+
+import com.cargolink.app.ui.theme.*
 
 data class OnboardingData(
     val title: String,
@@ -63,7 +67,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Beige.copy(alpha = 0.05f))
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -91,7 +95,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     repeat(onboardingPages.size) { iteration ->
-                        val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        val color = if (pagerState.currentPage == iteration) PrimaryBlue else Beige.copy(alpha = 0.5f)
                         Box(
                             modifier = Modifier
                                 .size(if (pagerState.currentPage == iteration) 24.dp else 8.dp, 8.dp)
@@ -115,7 +119,8 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     modifier = Modifier
                         .size(64.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(PrimaryBlue)
+                        .shadow(8.dp, CircleShape, spotColor = PrimaryBlue.copy(alpha = 0.5f))
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -135,8 +140,8 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         ) {
             Text(
                 text = "Skip",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
+                color = Color.Gray,
+                fontWeight = FontWeight.Bold
             )
         }
     }
@@ -153,16 +158,18 @@ fun OnboardingPage(data: OnboardingData) {
     ) {
         Box(
             modifier = Modifier
-                .size(200.dp)
-                .clip(RoundedCornerShape(40.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                .size(240.dp)
+                .clip(RoundedCornerShape(48.dp))
+                .background(Color.White)
+                .shadow(16.dp, RoundedCornerShape(48.dp), spotColor = Beige.copy(alpha = 0.3f))
+                .border(1.dp, Beige.copy(alpha = 0.4f), RoundedCornerShape(48.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = data.icon,
                 contentDescription = null,
-                modifier = Modifier.size(100.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(120.dp),
+                tint = PrimaryBlue
             )
         }
 
@@ -170,9 +177,9 @@ fun OnboardingPage(data: OnboardingData) {
 
         Text(
             text = data.title,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = DarkBlue,
             fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
             lineHeight = 36.sp
         )
@@ -181,7 +188,7 @@ fun OnboardingPage(data: OnboardingData) {
 
         Text(
             text = data.description,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = Color.Gray,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             lineHeight = 24.sp

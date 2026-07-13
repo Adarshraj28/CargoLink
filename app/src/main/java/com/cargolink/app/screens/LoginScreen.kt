@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Visibility
@@ -16,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +54,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Beige.copy(alpha = 0.05f))
     ) {
         // Background Header
         Column(modifier = Modifier.fillMaxSize()) {
@@ -69,7 +71,7 @@ fun LoginScreen(
                         .align(Alignment.BottomStart)
                         .offset(x = (-50).dp, y = 50.dp)
                         .alpha(0.05f),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = PrimaryBlue
                 )
                 
                 Column(
@@ -78,11 +80,11 @@ fun LoginScreen(
                     CargoLinkLogoIcon()
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "MOVE", fontFamily = Inter, color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                        Text(text = " • ", fontFamily = Inter, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "CONNECT", fontFamily = Inter, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                        Text(text = " • ", fontFamily = Inter, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "DELIVER", fontFamily = Inter, color = Beige, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text(text = "MOVE", color = PrimaryBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text(text = " • ", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "CONNECT", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text(text = " • ", color = Color.Gray.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "DELIVER", color = Beige, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     }
                 }
             }
@@ -98,11 +100,10 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                modifier = Modifier.fillMaxWidth().shadow(16.dp, RoundedCornerShape(24.dp), spotColor = Beige.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(24.dp),
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Beige.copy(alpha = 0.4f))
             ) {
                 Column(
                     modifier = Modifier.padding(32.dp)
@@ -110,13 +111,14 @@ fun LoginScreen(
                     Text(
                         text = if (role != null) "$role Login" else "Welcome Back",
                         style = MaterialTheme.typography.displayMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = DarkBlue,
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = if (role == "Driver") "Access your loads and earnings" else "Login to your logistics dashboard",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color.Gray
                     )
                     
                     Spacer(modifier = Modifier.height(32.dp))
@@ -141,7 +143,7 @@ fun LoginScreen(
                                 Icon(
                                     imageVector = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = Color.Gray
                                 )
                             }
                         }
@@ -152,7 +154,7 @@ fun LoginScreen(
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                         Text(
                             text = "Forgot Password?",
-                            color = MaterialTheme.colorScheme.primary,
+                            color = PrimaryBlue,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.clickable { }
@@ -178,11 +180,12 @@ fun LoginScreen(
                     OutlinedButton(
                         onClick = onPhoneLoginClick,
                         modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = MaterialTheme.shapes.medium
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue.copy(alpha = 0.3f))
                     ) {
-                        Icon(Icons.Default.Phone, contentDescription = null)
+                        Icon(Icons.Default.Phone, contentDescription = null, tint = PrimaryBlue)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Login with Phone Number")
+                        Text("Login with Phone", color = PrimaryBlue, fontWeight = FontWeight.Bold)
                     }
                     
                     Spacer(modifier = Modifier.height(24.dp))
@@ -194,11 +197,11 @@ fun LoginScreen(
                         Text(
                             "Don't have an account? ", 
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.Gray
                         )
                         Text(
                             "Sign up",
-                            color = MaterialTheme.colorScheme.primary,
+                            color = PrimaryBlue,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.clickable { onSignupClick(role ?: "Vendor") }

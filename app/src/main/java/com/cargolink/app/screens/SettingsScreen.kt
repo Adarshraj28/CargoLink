@@ -27,6 +27,7 @@ import com.cargolink.app.firebase.FirestoreManager
 import com.cargolink.app.ui.theme.Background
 import com.cargolink.app.ui.theme.DarkBlue
 import com.cargolink.app.ui.theme.LightBlue
+import com.cargolink.app.ui.theme.PrimaryBlue
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -165,14 +166,28 @@ fun SettingsScreen(
 }
 
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        fontWeight = FontWeight.Bold,
-        fontSize = 14.sp,
-        color = Color.Gray,
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp, top = 8.dp)
-    )
+fun SectionHeader(title: String, onSeeAll: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = Color.Gray
+        )
+        if (onSeeAll != null) {
+            Text(
+                text = "See All",
+                modifier = Modifier.clickable { onSeeAll() },
+                color = PrimaryBlue,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
 }
 
 @Composable

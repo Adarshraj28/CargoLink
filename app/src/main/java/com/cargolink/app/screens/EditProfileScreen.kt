@@ -15,10 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cargolink.app.firebase.AuthManager
 import com.cargolink.app.firebase.FirestoreManager
-import com.cargolink.app.ui.theme.BackgroundDark
-import com.cargolink.app.ui.theme.DarkBlue
-import com.cargolink.app.ui.theme.PrimaryBlue
-import com.cargolink.app.ui.theme.TextGray
+import com.cargolink.app.ui.theme.*
 
 import com.cargolink.app.viewmodel.AuthViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -57,13 +54,13 @@ fun EditProfileScreen(
     }
 
     Scaffold(
-        containerColor = BackgroundDark,
+        containerColor = Beige.copy(alpha = 0.05f),
         topBar = {
             TopAppBar(
-                title = { Text(if (isNewUser) "Complete Profile" else "Edit Profile", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = { Text(if (isNewUser) "Complete Profile" else "Edit Profile", fontWeight = FontWeight.Bold, color = DarkBlue) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = DarkBlue)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -78,7 +75,7 @@ fun EditProfileScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (isNewUser) {
-                Text("Select your role:", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Select your role:", color = DarkBlue, fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val roles = listOf("Vendor", "Driver")
                     roles.forEach { role ->
@@ -87,7 +84,7 @@ fun EditProfileScreen(
                             onClick = { selectedRole = role },
                             label = { Text(role) },
                             colors = FilterChipDefaults.filterChipColors(
-                                labelColor = Color.White,
+                                labelColor = DarkBlue,
                                 selectedLabelColor = Color.White,
                                 selectedContainerColor = PrimaryBlue
                             )
@@ -100,28 +97,32 @@ fun EditProfileScreen(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Full Name", color = TextGray) },
+                label = { Text("Full Name", color = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
+                    focusedTextColor = DarkBlue,
+                    unfocusedTextColor = DarkBlue,
                     focusedBorderColor = PrimaryBlue,
-                    unfocusedBorderColor = Color.Gray
+                    unfocusedBorderColor = Beige.copy(alpha = 0.5f),
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
                 )
             )
 
             OutlinedTextField(
                 value = phone,
                 onValueChange = { phone = it },
-                label = { Text("Phone Number / Email", color = TextGray) },
+                label = { Text("Phone Number / Email", color = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
+                    focusedTextColor = DarkBlue,
+                    unfocusedTextColor = DarkBlue,
                     focusedBorderColor = PrimaryBlue,
-                    unfocusedBorderColor = Color.Gray
+                    unfocusedBorderColor = Beige.copy(alpha = 0.5f),
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
                 )
             )
 
@@ -129,14 +130,16 @@ fun EditProfileScreen(
                 OutlinedTextField(
                     value = vehicleNo,
                     onValueChange = { vehicleNo = it },
-                    label = { Text("Vehicle Number", color = TextGray) },
+                    label = { Text("Vehicle Number", color = Color.Gray) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
+                        focusedTextColor = DarkBlue,
+                        unfocusedTextColor = DarkBlue,
                         focusedBorderColor = PrimaryBlue,
-                        unfocusedBorderColor = Color.Gray
+                        unfocusedBorderColor = Beige.copy(alpha = 0.5f),
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
                     )
                 )
             }

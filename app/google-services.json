@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "202178937547",
+    "project_id": "truckify-5745f",
+    "storage_bucket": "truckify-5745f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202178937547:android:e7aa24158b00c48bdd514e",
+        "android_client_info": {
+          "package_name": "com.cargolink.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoq2ow7TYRbqbcYRvAbWEUJinQenKuqzI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
